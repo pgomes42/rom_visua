@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Roomview Boutique — Descrição do Projeto</title>
+  <style>
+    :root {
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #b08d57;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+      color: var(--text);
+      margin: 48px;
+      line-height: 1.55;
+      font-size: 12.5pt;
+    }
+    h1, h2, h3 { margin: 0 0 8px; }
+    h1 { font-size: 24pt; letter-spacing: .2px; }
+    h2 { font-size: 16pt; margin-top: 24px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 13.5pt; margin-top: 16px; }
+    p { margin: 8px 0; }
+    .muted { color: var(--muted); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 10.5pt;
+      color: var(--muted);
+    }
+    ul { margin: 8px 0 0 20px; }
+    li { margin: 4px 0; }
+    .section { margin-top: 18px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 24px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .kvs {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 6px 12px;
+    }
+    .kvs div { padding: 2px 0; }
+    .accent { color: var(--accent); font-weight: 600; }
+    .footer {
+      margin-top: 32px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 10.5pt;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <h1>Roomview Boutique — Descrição do Projeto</h1>
+  <p class="muted">Data: 13 de fevereiro de 2026 · Documento técnico‑funcional</p>
+
+  <div class="section">
+    <h2>Resumo executivo</h2>
+    <p>
+      O Roomview Boutique é uma aplicação web para divulgação e reserva de apartamentos premium.
+      O sistema oferece um site público com catálogo de unidades, detalhes do apartamento, fluxo de reserva,
+      pagamento simulado e um painel administrativo para gestão de reservas, apartamentos e estatísticas.
+      A aplicação foi construída com foco em experiência visual, rapidez e usabilidade.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Objetivo do produto</h2>
+    <ul>
+      <li>Apresentar o portfólio de apartamentos de forma elegante e persuasiva.</li>
+      <li>Permitir reservas rápidas com validações essenciais (datas, capacidade, disponibilidade).</li>
+      <li>Simular pagamento e gestão de reservas, incluindo comprovativo.</li>
+      <li>Disponibilizar um painel interno para operações e gestão de dados.</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Funcionalidades principais</h2>
+
+    <h3>Website público</h3>
+    <ul>
+      <li>Home com hero, destaques e catálogo de apartamentos.</li>
+      <li>Cartões com preço/noite, tipologia e chamada para ação.</li>
+      <li>Rodapé com identidade e contacto.</li>
+    </ul>
+
+    <h3>Detalhe do apartamento</h3>
+    <ul>
+      <li>Galeria principal e descrição completa.</li>
+      <li>Indicadores de capacidade, suites, WC e dimensão.</li>
+      <li>Comodidades listadas e localização.</li>
+      <li>Acesso rápido a reserva e contacto via WhatsApp.</li>
+    </ul>
+
+    <h3>Reserva (cliente)</h3>
+    <ul>
+      <li>Seleção de apartamento e datas de check‑in/check‑out com calendário.</li>
+      <li>Validação de capacidade e cálculo automático de noites e total.</li>
+      <li>Formulário de dados do hóspede (nome, telefone, email, pessoas).</li>
+      <li>Resumo da reserva com sinal obrigatório.</li>
+    </ul>
+
+    <h3>Checkout e pagamento (simulado)</h3>
+    <ul>
+      <li>Contagem decrescente do prazo de pagamento.</li>
+      <li>Opções: Multicaixa Express, Referência e Transferência bancária.</li>
+      <li>Confirmação simulada e atualização do estado da reserva.</li>
+    </ul>
+
+    <h3>Gestão de reserva (cliente)</h3>
+    <ul>
+      <li>Pesquisa por ID da reserva e contacto (email/telefone).</li>
+      <li>Visualização de status, datas, valores e saldo.</li>
+      <li>Emissão de comprovativo (impressão/PDF).</li>
+    </ul>
+
+    <h3>Painel administrativo</h3>
+    <ul>
+      <li>Autenticação de utilizadores com permissões por função.</li>
+      <li>Gestão de reservas: status, check‑in, extras e cancelamentos.</li>
+      <li>Gestão de apartamentos: adicionar, editar e remover.</li>
+      <li>Estatísticas: volume de reservas e receita simulada.</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Fluxo de reserva (simplificado)</h2>
+    <ol>
+      <li>Utilizador seleciona apartamento e datas.</li>
+      <li>Sistema valida disponibilidade e capacidade.</li>
+      <li>Reserva é criada com ID e referência de pagamento.</li>
+      <li>Cliente segue para checkout e seleciona método.</li>
+      <li>Pagamento é confirmado (simulado) e a reserva muda de status.</li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h2>Dados e armazenamento</h2>
+    <div class="card">
+      <div class="kvs">
+        <div class="muted">Apartamentos</div>
+        <div>Armazenados em localStorage (<span class="accent">roomview_apartments</span>), com seed inicial.</div>
+        <div class="muted">Reservas</div>
+        <div>Armazenadas em localStorage (<span class="accent">roomview_bookings</span>). Validação de conflitos por intervalo.</div>
+        <div class="muted">Sessão/Utilizadores</div>
+        <div>Perfis simulados em localStorage (<span class="accent">roomview_users</span>, <span class="accent">roomview_session</span>).</div>
+        <div class="muted">Expiração</div>
+        <div>Reservas pendentes expiram após 2 horas sem pagamento.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Credenciais de demonstração (ambiente local)</h2>
+    <ul>
+      <li>Admin: <strong>admin@roomview.com</strong> / <strong>admin</strong></li>
+      <li>Gerente: <strong>gerente@roomview.com</strong> / <strong>gerente</strong></li>
+      <li>Operador: <strong>caixa@roomview.com</strong> / <strong>caixa</strong></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Tecnologias</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Frontend</h3>
+        <ul>
+          <li>React + TypeScript</li>
+          <li>Vite</li>
+          <li>Tailwind CSS + shadcn-ui</li>
+          <li>React Router</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>UX & Utilitários</h3>
+        <ul>
+          <li>Framer Motion</li>
+          <li>date-fns</li>
+          <li>Sonner (toasts)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Estrutura do projeto (principais pastas)</h2>
+    <ul>
+      <li><strong>src/pages</strong>: páginas (Home, Detalhe, Reserva, Checkout, Admin).</li>
+      <li><strong>src/components</strong>: componentes de UI e blocos da página.</li>
+      <li><strong>src/lib</strong>: serviços de dados (apartamentos, reservas, auth).</li>
+      <li><strong>src/data</strong>: modelos e dados iniciais.</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Como executar</h2>
+    <ul>
+      <li>Instalar dependências: <span class="badge">npm install</span></li>
+      <li>Iniciar: <span class="badge">npm run dev</span> (porta padrão 8080)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Limitações e próximas melhorias</h2>
+    <ul>
+      <li>Pagamentos são simulados (sem gateway real).</li>
+      <li>Persistência é local (localStorage) sem backend.</li>
+      <li>Sem upload real de comprovativo ou gestão de ficheiros.</li>
+      <li>Próximos passos: API real, base de dados, autenticação segura, integração de pagamentos e analytics.</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    Documento gerado automaticamente a partir da estrutura do projeto.
+  </div>
+</body>
+</html>

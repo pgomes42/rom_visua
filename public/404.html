@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Roomview Boutique</title>
+    <script>
+      (function () {
+        var segment = "/roomview-boutique";
+        var l = window.location;
+        var path = l.pathname.replace(segment, "");
+        var newUrl = segment + "?/" + path.replace(/^\//, "") + l.search.replace(/&/g, "~and~") + l.hash;
+        l.replace(newUrl);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

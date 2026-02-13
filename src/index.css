@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Montserrat:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 43 74% 49%;
+    --primary-foreground: 0 0% 4%;
+
+    --secondary: 31 22% 19%;
+    --secondary-foreground: 47 45% 76%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 218 11% 65%;
+
+    --accent: 43 74% 49%;
+    --accent-foreground: 0 0% 4%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 43 74% 49%;
+
+    --radius: 0.5rem;
+
+    --gold: 43 74% 49%;
+    --gold-light: 43 74% 70%;
+    --gold-dark: 43 63% 43%;
+    --wheat: 47 45% 76%;
+    --luxury-brown: 31 22% 19%;
+
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 43 74% 49%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 0 0% 16%;
+    --sidebar-ring: 43 74% 49%;
+
+    --font-display: 'Playfair Display', serif;
+    --font-body: 'Montserrat', sans-serif;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+@layer utilities {
+  .text-gradient-gold {
+    background: linear-gradient(135deg, hsl(43 63% 43%), hsl(47 80% 80%), hsl(43 74% 49%), hsl(43 63% 43%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-gradient-gold {
+    background: linear-gradient(135deg, hsl(43 63% 43%), hsl(43 74% 49%), hsl(43 63% 43%));
+  }
+
+  .border-gradient-gold {
+    border-image: linear-gradient(135deg, hsl(43 63% 43%), hsl(43 74% 49%)) 1;
+  }
+
+  .shadow-gold {
+    box-shadow: 0 4px 30px hsl(43 74% 49% / 0.15);
+  }
+
+  .shadow-gold-lg {
+    box-shadow: 0 10px 50px hsl(43 74% 49% / 0.25);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(0 0% 4%);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(43 74% 49% / 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(43 74% 49% / 0.5);
+}

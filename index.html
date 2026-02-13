@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Roomview Boutique — Alojamento Premium em Luanda</title>
+    <meta name="description" content="Alojamento boutique premium no Patriota, Luanda. Conforto, privacidade e segurança 24/7. Reserve online." />
+    <meta name="author" content="Roomview Boutique" />
+
+    <meta property="og:title" content="Roomview Boutique — Alojamento Premium" />
+    <meta property="og:description" content="Alojamento boutique premium no Patriota, Luanda. Reserve online." />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script>
+      (function () {
+        var redirect = location.search;
+        if (redirect.startsWith("?/")) {
+          var path = redirect.slice(2).replace(/~and~/g, "&");
+          var newUrl = location.origin + location.pathname.replace(/\/$/, "") + "/" + path + location.hash;
+          history.replaceState(null, "", newUrl);
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
