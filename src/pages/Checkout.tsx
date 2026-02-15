@@ -12,7 +12,9 @@ import {
     AlertCircle,
     Upload,
     ExternalLink,
-    ClipboardCheck
+    ClipboardCheck,
+    Wallet,
+    FileCheck
 } from "lucide-react";
 import { format, parseISO, differenceInSeconds } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -32,10 +34,11 @@ const Checkout = () => {
     const navigate = useNavigate();
     const [booking, setBooking] = useState<Booking | null>(null);
     const [timeLeft, setTimeLeft] = useState<number>(0);
-    const [paymentMethod, setPaymentMethod] = useState<"EXPRESS" | "REFERENCIA" | "TRANSFERENCIA" | null>(null);
+    const [paymentMethod, setPaymentMethod] = useState<"EXPRESS" | "REFERENCIA" | "TRANSFERENCIA" | "PRESENCIAL" | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [phoneNumber, setPhoneNumber] = useState("");
     const [paymentStatus, setPaymentStatus] = useState<"IDLE" | "AWAITING" | "CONFIRMED">("IDLE");
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
     // Load booking
     useEffect(() => {
@@ -56,18 +59,34 @@ const Checkout = () => {
 
     // Timer logic
     useEffect(() => {
-        if (timeLeft <= 0) return;
+        if (timeLeft <= 0) {
+            // Booking expired
+            if (booking && booking.status === "PENDENTE_PAGAMENTO") {
+                bookingService.updateBookingStatus(booking.id, "EXPIRADA");
+                toast.error("Reserva expirada!", {
+                    description: "O prazo de pagamento terminou. Por favor, crie uma nova reserva.",
+                    duration: 6000
+                });
+            }
+            return;
+        }
         const timer = setInterval(() => {
             setTimeLeft(prev => {
                 if (prev <= 1) {
                     clearInterval(timer);
                     return 0;
                 }
+                // Warning when 5 minutes left
+                if (prev === 300) {
+                    toast.warning("Apenas 5 minutos restantes!", {
+                        description: "Complete o pagamento para garantir a sua reserva."
+                    });
+                }
                 return prev - 1;
             });
         }, 1000);
         return () => clearInterval(timer);
-    }, [timeLeft]);
+    }, [timeLeft, booking]);
 
     const formattedTime = useMemo(() => {
         const hours = Math.floor(timeLeft / 3600);
@@ -96,10 +115,21 @@ const Checkout = () => {
 
             // Simulate confirmation after 5 seconds
             setTimeout(() => {
-                bookingService.updateBookingStatus(booking!.id, "CONFIRMADA");
+                // Update booking with payment method
+                if (booking) {
+                    const bookings = bookingService.getBookings();
+                    const index = bookings.findIndex(b => b.id === booking.id);
+                    if (index !== -1) {
+                        bookings[index].status = "CONFIRMADA";
+                        bookings[index].metodo_pagamento = "EXPRESS";
+                        localStorage.setItem("roomview_bookings", JSON.stringify(bookings));
+                        setBooking(bookings[index]);
+                    }
+                }
                 setPaymentStatus("CONFIRMED");
                 toast.success("Pagamento confirmado com sucesso!", {
-                    icon: <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+                    description: "A sua reserva está garantida. Verifique o seu e-mail."
                 });
             }, 5000);
         }, 2000);
@@ -108,6 +138,41 @@ const Checkout = () => {
     const copyToClipboard = (text: string, msg: string) => {
         navigator.clipboard.writeText(text);
         toast.success(msg);
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Validate file type
+            const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+            if (!validTypes.includes(file.type)) {
+                toast.error("Formato inválido. Use PDF, JPG ou PNG.");
+                return;
+            }
+            // Validate file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error("Ficheiro muito grande. Máximo 5MB.");
+                return;
+            }
+            setUploadedFile(file);
+            toast.success(`Ficheiro "${file.name}" carregado com sucesso!`);
+        }
+    };
+
+    const handleSubmitProof = () => {
+        if (!uploadedFile) {
+            toast.error("Por favor, carregue o comprovativo de pagamento.");
+            return;
+        }
+        setIsProcessing(true);
+        // Simulate upload
+        setTimeout(() => {
+            setIsProcessing(false);
+            toast.success("Comprovativo enviado! Aguarde a confirmação.", {
+                description: "Iremos validar o pagamento e confirmar a sua reserva em breve."
+            });
+            setPaymentStatus("AWAITING");
+        }, 2000);
     };
 
     if (!booking || !apartment) return null;
@@ -133,19 +198,48 @@ const Checkout = () => {
                         </div>
 
                         <div className="bg-card border border-border p-6 rounded-sm shadow-xl flex items-center gap-6 min-w-[280px]">
-                            <div className="p-3 bg-primary/10 rounded-full">
-                                <Clock className="w-6 h-6 text-primary animate-pulse" />
+                            <div className={`p-3 rounded-full ${timeLeft < 300 ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+                                <Clock className={`w-6 h-6 ${timeLeft < 300 ? 'text-destructive animate-pulse' : 'text-primary'}`} />
                             </div>
-                            <div className="space-y-1">
+                            <div className="space-y-2 flex-1">
                                 <p className="font-body text-[10px] uppercase tracking-widest text-muted-foreground">Tempo Restante</p>
-                                <p className={`font-display text-2xl font-bold ${timeLeft < 600 ? 'text-destructive' : 'text-foreground'}`}>
+                                <p className={`font-display text-2xl font-bold ${timeLeft === 0 ? 'text-destructive' : timeLeft < 600 ? 'text-destructive' : 'text-foreground'}`}>
                                     {timeLeft > 0 ? formattedTime : "EXPIRADA"}
                                 </p>
+                                <Progress 
+                                    value={(timeLeft / (2 * 60 * 60)) * 100} 
+                                    className={`h-1 ${timeLeft < 300 ? 'bg-destructive/20' : ''}`}
+                                />
                             </div>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        {/* Expired Overlay */}
+                        {timeLeft === 0 && (
+                            <div className="lg:col-span-12 mb-6">
+                                <motion.div
+                                    initial={{ opacity: 0, y: -20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="bg-destructive/10 border-2 border-destructive/30 p-6 rounded-sm flex items-center gap-4"
+                                >
+                                    <AlertCircle className="w-10 h-10 text-destructive flex-shrink-0" />
+                                    <div className="flex-grow">
+                                        <h3 className="font-display text-xl font-bold text-destructive">Reserva Expirada</h3>
+                                        <p className="font-body text-sm text-destructive/80 mt-1">
+                                            O prazo de pagamento terminou. Esta reserva foi cancelada. Por favor, crie uma nova reserva para garantir a sua estadia.
+                                        </p>
+                                    </div>
+                                    <Button 
+                                        onClick={() => navigate("/reservar")} 
+                                        className="bg-destructive text-white hover:bg-destructive/90"
+                                    >
+                                        Nova Reserva
+                                    </Button>
+                                </motion.div>
+                            </div>
+                        )}
+
                         {/* Left Column: Payment Options */}
                         <div className="lg:col-span-7 space-y-6">
                             <section className="bg-card border border-border p-0 rounded-sm shadow-sm overflow-hidden">
@@ -158,6 +252,15 @@ const Checkout = () => {
                                 </div>
 
                                 <div className="p-6 space-y-4">
+                                    {timeLeft === 0 ? (
+                                        <div className="p-8 text-center">
+                                            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+                                            <p className="font-body text-muted-foreground">
+                                                Os métodos de pagamento não estão mais disponíveis porque o prazo expirou.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <>
                                     {/* Option 1: Express */}
                                     <div
                                         onClick={() => setPaymentMethod("EXPRESS")}
@@ -307,16 +410,131 @@ const Checkout = () => {
 
                                                         <div className="border-t border-border pt-4">
                                                             <Label className="text-xs uppercase tracking-widest text-muted-foreground mb-3 block">Submeter Comprovativo</Label>
-                                                            <div className="border-2 border-dashed border-border rounded-sm p-8 text-center hover:border-primary/50 transition-colors group cursor-pointer">
-                                                                <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-3 group-hover:text-primary transition-colors" />
-                                                                <p className="font-body text-xs text-muted-foreground">Clique para fazer upload ou arraste o ficheiro (PDF, JPG, PNG)</p>
-                                                            </div>
+                                                            <input 
+                                                                type="file" 
+                                                                id="proof-upload" 
+                                                                className="hidden" 
+                                                                accept=".pdf,.jpg,.jpeg,.png"
+                                                                onChange={handleFileUpload}
+                                                            />
+                                                            <label 
+                                                                htmlFor="proof-upload"
+                                                                className="border-2 border-dashed border-border rounded-sm p-8 text-center hover:border-primary/50 transition-colors group cursor-pointer block"
+                                                            >
+                                                                {uploadedFile ? (
+                                                                    <div className="space-y-2">
+                                                                        <FileCheck className="w-8 h-8 text-green-500 mx-auto" />
+                                                                        <p className="font-body text-sm text-foreground font-medium">{uploadedFile.name}</p>
+                                                                        <p className="font-body text-xs text-muted-foreground">{(uploadedFile.size / 1024).toFixed(1)} KB</p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <>
+                                                                        <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-3 group-hover:text-primary transition-colors" />
+                                                                        <p className="font-body text-xs text-muted-foreground">Clique para fazer upload ou arraste o ficheiro</p>
+                                                                        <p className="font-body text-[10px] text-muted-foreground mt-1">(PDF, JPG, PNG - Máx. 5MB)</p>
+                                                                    </>
+                                                                )}
+                                                            </label>
+                                                            {uploadedFile && (
+                                                                <Button
+                                                                    onClick={handleSubmitProof}
+                                                                    disabled={isProcessing}
+                                                                    className="w-full mt-4 bg-primary text-primary-foreground font-body font-bold py-6"
+                                                                >
+                                                                    {isProcessing ? "A enviar..." : "Submeter Comprovativo"}
+                                                                </Button>
+                                                            )}
                                                         </div>
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
                                         </div>
                                     </div>
+
+                                    {/* Option 4: Presencial (Balcão) */}
+                                    <div
+                                        onClick={() => setPaymentMethod("PRESENCIAL")}
+                                        className={`p-5 border cursor-pointer transition-all rounded-sm flex items-start gap-4 ${paymentMethod === "PRESENCIAL" ? 'border-primary bg-primary/5 shadow-inner' : 'border-border hover:border-primary/50 bg-muted/20'}`}
+                                    >
+                                        <div className="p-3 bg-card border border-border rounded-sm">
+                                            <Wallet className={`w-6 h-6 ${paymentMethod === "PRESENCIAL" ? 'text-primary' : 'text-muted-foreground'}`} />
+                                        </div>
+                                        <div className="flex-grow">
+                                            <h3 className="font-body font-bold text-foreground">Pagamento Presencial</h3>
+                                            <p className="font-body text-xs text-muted-foreground mt-1">Pague directamente no nosso balcão em dinheiro ou TPA.</p>
+
+                                            <AnimatePresence>
+                                                {paymentMethod === "PRESENCIAL" && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: "auto" }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        className="mt-6 p-4 bg-card border border-border rounded-sm space-y-4"
+                                                    >
+                                                        <div className="bg-primary/5 border border-primary/20 rounded-sm p-4 space-y-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <Building className="w-5 h-5 text-primary" />
+                                                                <h4 className="font-bold text-foreground">Roomview Boutique</h4>
+                                                            </div>
+                                                            <div className="space-y-2 text-sm">
+                                                                <p className="text-muted-foreground">
+                                                                    <span className="font-semibold text-foreground">Morada:</span> Patriota, Via Principal, Luanda
+                                                                </p>
+                                                                <p className="text-muted-foreground">
+                                                                    <span className="font-semibold text-foreground">Horário:</span> Segunda a Domingo, 08:00 - 20:00
+                                                                </p>
+                                                                <p className="text-muted-foreground">
+                                                                    <span className="font-semibold text-foreground">Contacto:</span> +244 923 000 000
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="bg-muted/50 border border-border rounded-sm p-4">
+                                                            <p className="text-xs text-muted-foreground mb-3">
+                                                                <span className="font-bold text-foreground">Atenção:</span> A reserva será mantida por 2 horas. Por favor, dirija-se ao balcão para efectuar o pagamento dentro deste prazo.
+                                                            </p>
+                                                            <div className="flex items-center gap-2 text-xs">
+                                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                                                <span className="text-green-600 font-medium">Aceitamos dinheiro e TPA (Multicaixa)</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <Button
+                                                            onClick={() => {
+                                                                toast.success("Reserva mantida!", {
+                                                                    description: "Aguardamos a sua visita ao balcão para confirmar o pagamento."
+                                                                });
+                                                                // Update metodo_pagamento
+                                                                if (booking) {
+                                                                    const bookings = bookingService.getBookings();
+                                                                    const index = bookings.findIndex(b => b.id === booking.id);
+                                                                    if (index !== -1) {
+                                                                        bookings[index].metodo_pagamento = "PRESENCIAL";
+                                                                        localStorage.setItem("roomview_bookings", JSON.stringify(bookings));
+                                                                    }
+                                                                }
+                                                            }}
+                                                            className="w-full bg-primary text-primary-foreground font-body font-bold py-6"
+                                                        >
+                                                            Confirmar Pagamento no Balcão
+                                                        </Button>
+
+                                                        <a
+                                                            href="https://maps.google.com/?q=Patriota,Luanda"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center justify-center gap-2 text-xs text-primary hover:underline"
+                                                        >
+                                                            Ver localização no mapa
+                                                            <ExternalLink className="w-3 h-3" />
+                                                        </a>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    </div>
+                                    </>
+                                    )}
                                 </div>
                             </section>
 

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Seed Data - Roomview</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: #d4af37;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 2rem;
+        }
+        .section {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .section h2 {
+            color: #d4af37;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        button {
+            background: #d4af37;
+            color: #000;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #e5c050;
+            transform: translateY(-2px);
+        }
+        button.danger {
+            background: #ef4444;
+            color: #fff;
+        }
+        button.danger:hover {
+            background: #dc2626;
+        }
+        button.secondary {
+            background: #3b82f6;
+            color: #fff;
+        }
+        button.secondary:hover {
+            background: #2563eb;
+        }
+        .output {
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .output div {
+            margin-bottom: 0.5rem;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+        .warning { color: #f59e0b; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .stat-card {
+            background: #1a1a1a;
+            border: 1px solid #d4af37;
+            border-radius: 4px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #d4af37;
+        }
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        code {
+            background: #000;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            color: #d4af37;
+            font-size: 0.9rem;
+        }
+        .alert {
+            background: #1e3a5f;
+            border-left: 4px solid #3b82f6;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌱 Teste Seed Data</h1>
+        <p class="subtitle">Sistema de Geração de Dados de Teste - Roomview Boutique</p>
+        
+        <div class="alert">
+            <strong>ℹ️ Como usar:</strong> Clique nos botões abaixo para testar as funcionalidades. Os resultados aparecerão na área de output.
+        </div>
+
+        <div class="section">
+            <h2>📊 Geração de Dados</h2>
+            <p style="margin-bottom: 1rem; color: #aaa;">
+                Gere reservas simuladas dos últimos 6 meses para testar estatísticas.
+            </p>
+            <button onclick="generateBookings(25)">🌱 Gerar 25 Reservas</button>
+            <button onclick="generateBookings(50)">🌱 Gerar 50 Reservas</button>
+            <button onclick="generateBookings(100)">🌱 Gerar 100 Reservas</button>
+        </div>
+
+        <div class="section">
+            <h2>📈 Estatísticas</h2>
+            <p style="margin-bottom: 1rem; color: #aaa;">
+                Visualize as estatísticas das reservas atuais no localStorage.
+            </p>
+            <button class="secondary" onclick="showStats()">📊 Ver Estatísticas</button>
+            <button class="secondary" onclick="showRawData()">🔍 Ver Dados Brutos</button>
+        </div>
+
+        <div class="section">
+            <h2>🗑️ Limpeza</h2>
+            <p style="margin-bottom: 1rem; color: #aaa;">
+                Remova todos os dados de teste do localStorage.
+            </p>
+            <button class="danger" onclick="clearData()">🗑️ Limpar Todas as Reservas</button>
+        </div>
+
+        <div class="section">
+            <h2>🚀 Links Rápidos</h2>
+            <a href="/rom_visua/admin" target="_blank">
+                <button class="secondary">👤 Abrir Admin Panel</button>
+            </a>
+            <a href="/rom_visua/" target="_blank">
+                <button class="secondary">🏠 Abrir Homepage</button>
+            </a>
+        </div>
+
+        <div class="section">
+            <h2>📟 Output</h2>
+            <div id="output" class="output">
+                <div class="info">Pronto para testar! Clique em um botão acima.</div>
+            </div>
+        </div>
+
+        <div id="statsDisplay"></div>
+    </div>
+
+    <script>
+        const output = document.getElementById('output');
+        const statsDisplay = document.getElementById('statsDisplay');
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = message;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearOutput() {
+            output.innerHTML = '';
+        }
+
+        function generateBookings(count) {
+            clearOutput();
+            log(`🌱 Gerando ${count} reservas de teste...`, 'info');
+            
+            try {
+                // Simular chamada ao seedBookings
+                const bookings = JSON.parse(localStorage.getItem('roomview_bookings') || '[]');
+                const initialCount = bookings.length;
+                
+                log(`📊 Total de reservas antes: ${initialCount}`, 'info');
+                log(`⏳ Processando...`, 'warning');
+                
+                // Aqui normalmente chamaria seedBookings(count)
+                // Mas como estamos em página estática, vamos simular
+                setTimeout(() => {
+                    log(`✅ Comando executado!`, 'success');
+                    log(`💡 Abra o console do browser (F12) e execute:`, 'info');
+                    log(`   seedBookings(${count})`, 'warning');
+                    log(``, 'info');
+                    log(`📌 Ou vá para /admin e use os botões na tela de login!`, 'warning');
+                }, 500);
+                
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        function showStats() {
+            clearOutput();
+            log('📊 Carregando estatísticas...', 'info');
+            
+            try {
+                const bookings = JSON.parse(localStorage.getItem('roomview_bookings') || '[]');
+                
+                if (bookings.length === 0) {
+                    log('⚠️ Nenhuma reserva encontrada!', 'warning');
+                    log('💡 Gere algumas reservas primeiro.', 'info');
+                    return;
+                }
+                
+                log(`📈 Total de reservas: ${bookings.length}`, 'success');
+                log('', 'info');
+                
+                // Status
+                const byStatus = {};
+                bookings.forEach(b => {
+                    byStatus[b.status] = (byStatus[b.status] || 0) + 1;
+                });
+                
+                log('📊 Por Status:', 'info');
+                Object.entries(byStatus).forEach(([status, count]) => {
+                    log(`   ${status}: ${count}`, 'success');
+                });
+                log('', 'info');
+                
+                // Receita
+                let totalRevenue = 0;
+                bookings.forEach(b => {
+                    if (b.status !== 'CANCELADA' && b.status !== 'PENDENTE_PAGAMENTO') {
+                        totalRevenue += b.total_estadia || 0;
+                    }
+                });
+                
+                log(`💰 Receita Total: ${totalRevenue.toLocaleString('pt-AO')} AKZ`, 'success');
+                
+                // Cards
+                statsDisplay.innerHTML = `
+                    <div class="section">
+                        <h2>📊 Resumo Visual</h2>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <div class="value">${bookings.length}</div>
+                                <div class="label">Total Reservas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">${byStatus['CONFIRMADA'] || 0}</div>
+                                <div class="label">Confirmadas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">${byStatus['FINALIZADA'] || 0}</div>
+                                <div class="label">Finalizadas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">${byStatus['CANCELADA'] || 0}</div>
+                                <div class="label">Canceladas</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">${(totalRevenue / 1000000).toFixed(1)}M</div>
+                                <div class="label">Receita (AKZ)</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        function showRawData() {
+            clearOutput();
+            log('🔍 Carregando dados brutos...', 'info');
+            
+            try {
+                const bookings = JSON.parse(localStorage.getItem('roomview_bookings') || '[]');
+                
+                if (bookings.length === 0) {
+                    log('⚠️ Nenhuma reserva encontrada!', 'warning');
+                    return;
+                }
+                
+                log(`📋 Primeiras 5 reservas:`, 'info');
+                log('', 'info');
+                
+                bookings.slice(0, 5).forEach((b, i) => {
+                    log(`${i + 1}. ${b.id}`, 'success');
+                    log(`   Cliente: ${b.cliente_nome}`, 'info');
+                    log(`   Status: ${b.status}`, 'warning');
+                    log(`   Total: ${b.total_estadia?.toLocaleString('pt-AO')} AKZ`, 'info');
+                    log(`   Check-in: ${b.checkin}`, 'info');
+                    log('', 'info');
+                });
+                
+                if (bookings.length > 5) {
+                    log(`... e mais ${bookings.length - 5} reservas`, 'info');
+                }
+                
+                statsDisplay.innerHTML = '';
+                
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        function clearData() {
+            if (!confirm('⚠️ Tem certeza que deseja limpar TODAS as reservas?')) {
+                return;
+            }
+            
+            clearOutput();
+            log('🗑️ Limpando dados...', 'warning');
+            
+            try {
+                const before = JSON.parse(localStorage.getItem('roomview_bookings') || '[]').length;
+                localStorage.removeItem('roomview_bookings');
+                
+                log(`✅ ${before} reservas foram removidas!`, 'success');
+                log('💡 Você pode gerar novas reservas agora.', 'info');
+                
+                statsDisplay.innerHTML = '';
+                
+            } catch (error) {
+                log(`❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-carregar stats se houver dados
+        window.addEventListener('load', () => {
+            const bookings = JSON.parse(localStorage.getItem('roomview_bookings') || '[]');
+            if (bookings.length > 0) {
+                showStats();
+            }
+        });
+    </script>
+</body>
+</html>

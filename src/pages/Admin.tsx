@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { LayoutDashboard, CalendarDays, Building2, BarChart3, LogIn, LogOut, ClipboardList, Check, X, RefreshCcw, Plus, Edit2, Trash2, Save, X as CloseX, CheckCircle } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Building2, BarChart3, LogIn, LogOut, ClipboardList, Check, X, RefreshCcw, Plus, Edit2, Trash2, Save, X as CloseX, CheckCircle, Shield, DollarSign, Users, Percent } from "lucide-react";
 import { Apartment, BookingStatus, Booking, formatCurrency } from "@/data/apartments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,30 @@ import { apartmentService } from "@/lib/apartmentService";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { bookingService } from "@/lib/bookingService";
-import { authService, User } from "@/lib/authService";
-import { format, parseISO } from "date-fns";
+import { authService, User, UserRole, Permission, ROLE_PERMISSIONS } from "@/lib/authService";
+import { format, parseISO, isSameDay, endOfDay, isAfter } from "date-fns";
 import { pt } from "date-fns/locale";
 import { toast } from "sonner";
 import logo from "@/assets/logo.svg";
 import { useSearchParams } from "react-router-dom";
+import PermissionsHelp from "@/components/PermissionsHelp";
+import ExtrasManager, { ExtraItem } from "@/components/ExtrasManager";
+import { 
+  StatsCard, 
+  RevenueChart, 
+  BookingsChart, 
+  StatusDistributionChart, 
+  OccupancyRateChart, 
+  TopApartmentsChart 
+} from "@/components/StatisticsCharts";
+import { 
+  calculateDashboardStats, 
+  getMonthlyRevenueData, 
+  getStatusDistribution, 
+  getOccupancyByApartment, 
+  getTopApartments 
+} from "@/lib/statisticsService";
+import { seedBookings, clearAllBookings } from "@/lib/seedData";
 
 const statusColors: Record<string, string> = {
   PENDENTE_PAGAMENTO: "bg-yellow-500/10 text-yellow-500",
@@ -25,7 +43,7 @@ const statusColors: Record<string, string> = {
   EXPIRADA: "bg-muted text-muted-foreground",
 };
 
-type Tab = "reservas" | "apartamentos" | "estatisticas";
+type Tab = "reservas" | "apartamentos" | "estatisticas" | "usuarios" | "perfil";
 
 const Admin = () => {
   const [searchParams] = useSearchParams();
@@ -37,6 +55,14 @@ const Admin = () => {
 
   const [bookings, setBookings] = useState<Booking[]>(bookingService.getBookings());
   const [apartmentsList, setApartmentsList] = useState<Apartment[]>(apartmentService.getApartments());
+  const [users, setUsers] = useState<User[]>(authService.getUsers());
+  const [userForm, setUserForm] = useState({
+    nome: "",
+    email: "",
+    role: "OPERADOR" as UserRole
+  });
+  const [showAllBookings, setShowAllBookings] = useState(false);
+  const [bookingSearch, setBookingSearch] = useState("");
 
   useEffect(() => {
     const user = authService.getCurrentUser();
@@ -45,6 +71,24 @@ const Admin = () => {
       setCurrentUser(user);
     }
   }, []);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      setUsers(authService.getUsers());
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const intervalId = setInterval(() => {
+      setBookings(bookingService.getBookings());
+      setApartmentsList(apartmentService.getApartments());
+      setUsers(authService.getUsers());
+    }, 10000);
+
+    return () => clearInterval(intervalId);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (isLoggedIn) return;
@@ -61,6 +105,27 @@ const Admin = () => {
   const [lastBooking, setLastBooking] = useState<Booking | null>(null);
 
   const apartments = apartmentService.getApartments();
+  const allBookingsSorted = bookings
+    .slice()
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const activeBookings = bookings
+    .filter(b => !["FINALIZADA", "CANCELADA", "EXPIRADA"].includes(b.status))
+    .slice()
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const bookingsToDisplay = showAllBookings ? allBookingsSorted : activeBookings;
+  const normalizedSearch = bookingSearch.trim().toLowerCase();
+  const filteredBookings = normalizedSearch.length > 0
+    ? bookingsToDisplay.filter(b => {
+      const id = b.id.toLowerCase();
+      const nome = b.cliente_nome.toLowerCase();
+      const email = b.email.toLowerCase();
+      const telefone = b.telefone.toLowerCase();
+      return id.includes(normalizedSearch)
+        || nome.includes(normalizedSearch)
+        || email.includes(normalizedSearch)
+        || telefone.includes(normalizedSearch);
+    })
+    : bookingsToDisplay;
 
   // Apartment Form State
   const [isEditingApt, setIsEditingApt] = useState(false);
@@ -84,9 +149,6 @@ const Admin = () => {
   // Operator Action Modals
   const [isAddingExtra, setIsAddingExtra] = useState(false);
   const [selectedBookingForExtra, setSelectedBookingForExtra] = useState<string | null>(null);
-  const [extraItem, setExtraItem] = useState("");
-  const [extraQty, setExtraQty] = useState(1);
-  const [extraPrice, setExtraPrice] = useState(0);
 
   const [isCreatingManualBooking, setIsCreatingManualBooking] = useState(false);
 
@@ -108,6 +170,43 @@ const Admin = () => {
     authService.logout();
     setIsLoggedIn(false);
     setCurrentUser(null);
+  };
+
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!can("MANAGE_USERS")) return;
+
+    const created = authService.addUser({
+      nome: userForm.nome.trim(),
+      email: userForm.email.trim(),
+      role: userForm.role
+    });
+
+    if (!created) {
+      toast.error("Ja existe um utilizador com este e-mail");
+      return;
+    }
+
+    setUsers(authService.getUsers());
+    setUserForm({ nome: "", email: "", role: "OPERADOR" });
+    toast.success("Utilizador criado. Password padrao: 123456");
+  };
+
+  const handleDeleteUser = (id: string) => {
+    if (!can("MANAGE_USERS")) return;
+    if (currentUser?.id === id) {
+      toast.error("Nao e possivel eliminar o proprio perfil");
+      return;
+    }
+    if (window.confirm("Tem a certeza que deseja eliminar este utilizador?")) {
+      const success = authService.deleteUser(id);
+      if (success) {
+        setUsers(authService.getUsers());
+        toast.success("Utilizador eliminado com sucesso");
+      } else {
+        toast.error("Nao foi possivel eliminar o utilizador");
+      }
+    }
   };
 
   const can = (permission: any) => currentUser ? authService.hasPermission(currentUser, permission) : false;
@@ -136,19 +235,10 @@ const Admin = () => {
     }
   };
 
-  const handleAddExtra = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedBookingForExtra && extraItem && extraQty > 0) {
-      if (bookingService.addExtra(selectedBookingForExtra, {
-        item: extraItem,
-        quantidade: extraQty,
-        preco_unitario: extraPrice
-      })) {
+  const handleAddExtra = (extra: ExtraItem) => {
+    if (selectedBookingForExtra) {
+      if (bookingService.addExtra(selectedBookingForExtra, extra)) {
         setBookings(bookingService.getBookings());
-        setIsAddingExtra(false);
-        setExtraItem("");
-        setExtraQty(1);
-        setExtraPrice(0);
         toast.success("Extra adicionado com sucesso!");
       }
     }
@@ -213,6 +303,26 @@ const Admin = () => {
     setIsEditingApt(false);
   };
 
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case "ADMIN": return "bg-red-500/10 text-red-500 border-red-500/20";
+      case "GERENTE": return "bg-blue-500/10 text-blue-500 border-blue-500/20";
+      case "OPERADOR": return "bg-green-500/10 text-green-500 border-green-500/20";
+      case "CLIENTE": return "bg-gray-500/10 text-gray-500 border-gray-500/20";
+      default: return "bg-muted text-muted-foreground border-border/50";
+    }
+  };
+
+  const getRoleDescription = (role: string) => {
+    switch (role) {
+      case "ADMIN": return "Controlo total do sistema";
+      case "GERENTE": return "Gestão e relatórios";
+      case "OPERADOR": return "Operações do balcão";
+      case "CLIENTE": return "Acesso limitado";
+      default: return "";
+    }
+  };
+
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -224,6 +334,80 @@ const Admin = () => {
           </div>
           <div className="bg-card border border-border p-8 rounded-sm shadow-xl">
             <h2 className="font-display text-xl font-semibold text-foreground mb-6 text-center italic underline underline-offset-8 decoration-primary/30">Autenticação</h2>
+            
+            {/* DEV Mode Helper */}
+            {import.meta.env.DEV && (
+              <div className="mb-6 p-4 bg-muted/50 border border-border rounded-sm">
+                <p className="text-xs font-semibold text-primary mb-2 uppercase tracking-wider">🔧 Modo Desenvolvimento</p>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center p-2 bg-red-500/5 rounded border border-red-500/10">
+                    <div>
+                      <p className="font-bold text-red-400">ADMIN</p>
+                      <p className="text-[10px] text-muted-foreground">admin@roomview.com / admin</p>
+                    </div>
+                    <button
+                      onClick={() => { setEmail("admin@roomview.com"); setPassword("admin"); }}
+                      className="text-[10px] px-2 py-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition"
+                    >
+                      Preencher
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-blue-500/5 rounded border border-blue-500/10">
+                    <div>
+                      <p className="font-bold text-blue-400">GERENTE</p>
+                      <p className="text-[10px] text-muted-foreground">gerente@roomview.com / gerente</p>
+                    </div>
+                    <button
+                      onClick={() => { setEmail("gerente@roomview.com"); setPassword("gerente"); }}
+                      className="text-[10px] px-2 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition"
+                    >
+                      Preencher
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-green-500/5 rounded border border-green-500/10">
+                    <div>
+                      <p className="font-bold text-green-400">OPERADOR</p>
+                      <p className="text-[10px] text-muted-foreground">caixa@roomview.com / caixa</p>
+                    </div>
+                    <button
+                      onClick={() => { setEmail("caixa@roomview.com"); setPassword("caixa"); }}
+                      className="text-[10px] px-2 py-1 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition"
+                    >
+                      Preencher
+                    </button>
+                  </div>
+                  
+                  {/* Seed Data Buttons */}
+                  <div className="mt-4 pt-4 border-t border-border space-y-2">
+                    <p className="text-xs font-semibold text-yellow-400 mb-2 uppercase tracking-wider">📊 Dados de Teste</p>
+                    <button
+                      onClick={() => {
+                        const count = 50;
+                        seedBookings(count);
+                        setBookings(bookingService.getBookings());
+                        toast.success(`${count} reservas de teste geradas!`);
+                      }}
+                      className="w-full text-xs px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded hover:bg-yellow-500/30 transition font-medium"
+                    >
+                      🌱 Gerar 50 Reservas de Teste
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Tem a certeza que deseja limpar TODAS as reservas?')) {
+                          clearAllBookings();
+                          setBookings([]);
+                          toast.info('Todas as reservas foram removidas');
+                        }
+                      }}
+                      className="w-full text-xs px-3 py-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition font-medium"
+                    >
+                      🗑️ Limpar Todas as Reservas
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">E-mail</Label>
@@ -266,6 +450,8 @@ const Admin = () => {
     { id: "reservas" as Tab, label: "Reservas", icon: CalendarDays },
     { id: "apartamentos" as Tab, label: "Apartamentos", icon: Building2 },
     { id: "estatisticas" as Tab, label: "Estatísticas", icon: BarChart3 },
+    { id: "usuarios" as Tab, label: "Usuarios", icon: Users },
+    { id: "perfil" as Tab, label: "Perfil", icon: Shield },
   ];
 
   return (
@@ -276,8 +462,11 @@ const Admin = () => {
           <div className="mb-10">
             <img src={logo} alt="Roomview Boutique" className="h-10 mb-6" />
             <div className="mt-4 p-3 bg-muted rounded-sm border border-border/50">
-              <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">{currentUser?.role}</p>
-              <p className="text-sm font-medium text-foreground truncate">{currentUser?.nome}</p>
+              <div className={`text-[10px] font-bold uppercase tracking-widest mb-1 px-2 py-1 rounded border inline-block ${getRoleBadgeColor(currentUser?.role || '')}`}>
+                {currentUser?.role}
+              </div>
+              <p className="text-sm font-medium text-foreground truncate mt-2">{currentUser?.nome}</p>
+              <p className="text-[10px] text-muted-foreground mt-1 italic">{getRoleDescription(currentUser?.role || '')}</p>
             </div>
           </div>
 
@@ -285,6 +474,7 @@ const Admin = () => {
             {tabs.filter(tab => {
               if (tab.id === "apartamentos") return can("MANAGE_APARTMENTS");
               if (tab.id === "estatisticas") return can("VIEW_FINANCIALS");
+              if (tab.id === "usuarios") return can("MANAGE_USERS");
               return true;
             }).map((tab) => (
               <button
@@ -314,11 +504,26 @@ const Admin = () => {
 
       {/* Main */}
       <main className="lg:ml-64 p-6 lg:p-8">
+        {/* Mobile Header */}
+        <div className="lg:hidden mb-6 flex items-center justify-between bg-card border border-border p-4 rounded-sm">
+          <div>
+            <div className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded border inline-block mb-2 ${getRoleBadgeColor(currentUser?.role || '')}`}>
+              {currentUser?.role}
+            </div>
+            <p className="text-sm font-medium text-foreground">{currentUser?.nome}</p>
+            <p className="text-[10px] text-muted-foreground italic">{getRoleDescription(currentUser?.role || '')}</p>
+          </div>
+          <Button onClick={handleLogout} variant="outline" size="sm">
+            <LogOut className="w-4 h-4" />
+          </Button>
+        </div>
+        
         {/* Mobile tabs */}
         <div className="flex lg:hidden gap-2 mb-6 overflow-x-auto pb-2">
           {tabs.filter(tab => {
             if (tab.id === "apartamentos") return can("MANAGE_APARTMENTS");
             if (tab.id === "estatisticas") return can("VIEW_FINANCIALS");
+            if (tab.id === "usuarios") return can("MANAGE_USERS");
             return true;
           }).map((tab) => (
             <button
@@ -372,6 +577,35 @@ const Admin = () => {
 
             {/* Reservations table */}
             <div className="bg-card border border-border rounded-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div className="flex-1">
+                  <Label className="text-xs text-muted-foreground">Pesquisar reserva</Label>
+                  <Input
+                    value={bookingSearch}
+                    onChange={(e) => setBookingSearch(e.target.value)}
+                    placeholder="ID, nome, e-mail ou telemovel"
+                    className="mt-2 bg-muted border-border"
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Resultados: <span className="text-foreground font-semibold">{filteredBookings.length}</span>
+                </div>
+              </div>
+              {(currentUser?.role === "GERENTE" || currentUser?.role === "ADMIN") && (
+                <div className="px-4 py-3 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    A visualizar: <span className="text-foreground font-semibold">{showAllBookings ? "Todas as reservas" : "Reservas activas"}</span>
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAllBookings((prev) => !prev)}
+                    className="text-xs"
+                  >
+                    {showAllBookings ? "Ver apenas activas" : "Ver todas as reservas"}
+                  </Button>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-muted">
@@ -382,8 +616,12 @@ const Admin = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {bookings.length > 0 ? bookings.map((r) => {
+                    {filteredBookings.length > 0 ? filteredBookings.map((r) => {
                       const apt = apartments.find(a => a.id === r.apartment_id);
+                      const checkoutDate = parseISO(r.checkout);
+                      const isCheckoutToday = isSameDay(checkoutDate, new Date());
+                      const isCheckoutOverdue = isAfter(new Date(), endOfDay(checkoutDate));
+                      const hasOutstandingBalance = (r.restante_pagar ?? 0) > 0;
                       return (
                         <tr key={r.id} className="hover:bg-muted/50 transition-colors">
                           <td className="px-4 py-3 font-body text-sm text-primary font-medium">{r.id}</td>
@@ -407,9 +645,21 @@ const Admin = () => {
                             {formatCurrency(r.restante_pagar ?? 0)}
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`font-body text-[10px] font-semibold uppercase px-2 py-0.5 rounded-sm ${statusColors[r.status]}`}>
-                              {r.status}
-                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`font-body text-[10px] font-semibold uppercase px-2 py-0.5 rounded-sm ${statusColors[r.status]}`}>
+                                {r.status}
+                              </span>
+                              {isCheckoutToday && (
+                                <span className="font-body text-[10px] font-semibold uppercase px-2 py-0.5 rounded-sm bg-amber-500/10 text-amber-500">
+                                  Checkout hoje
+                                </span>
+                              )}
+                              {isCheckoutOverdue && hasOutstandingBalance && (
+                                <span className="font-body text-[10px] font-semibold uppercase px-2 py-0.5 rounded-sm bg-red-500/10 text-red-500">
+                                  Divida pendente
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex gap-2">
@@ -435,7 +685,7 @@ const Admin = () => {
                                   <CheckCircle className="w-4 h-4" />
                                 </button>
                               )}
-                              {(r.status === "CONFIRMADA" || r.status === "CHECKIN_REALIZADO" || r.status === "FINALIZADA") && can("MANAGE_EXTRAS") && (
+                              {(r.status === "CONFIRMADA" || r.status === "CHECKIN_REALIZADO") && can("MANAGE_EXTRAS") && (
                                 <button
                                   onClick={() => {
                                     setSelectedBookingForExtra(r.id);
@@ -492,7 +742,9 @@ const Admin = () => {
                     }) : (
                       <tr>
                         <td colSpan={8} className="px-4 py-8 text-center font-body text-sm text-muted-foreground italic">
-                          Nenhuma reserva encontrada.
+                          {normalizedSearch
+                            ? "Nenhuma reserva encontrada para esta pesquisa."
+                            : (showAllBookings ? "Nenhuma reserva encontrada." : "Nenhuma reserva activa encontrada.")}
                         </td>
                       </tr>
                     )}
@@ -688,58 +940,198 @@ const Admin = () => {
         )}
 
         {activeTab === "estatisticas" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-card border border-border rounded-sm p-6">
-              <h3 className="font-display text-lg font-semibold text-foreground mb-4">Receita Total</h3>
-              <p className="font-display text-3xl font-bold text-primary">{formatCurrency(stats.receita)}</p>
-              <p className="font-body text-sm text-muted-foreground mt-1">Acumulado (Confirmado)</p>
+          <div className="space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatsCard
+                title="Receita Total"
+                value={formatCurrency((() => {
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  return dashboardStats.totalRevenue;
+                })())}
+                change={(() => {
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  return dashboardStats.revenueChange;
+                })()}
+                icon={DollarSign}
+                color="green"
+              />
+              <StatsCard
+                title="Reservas Totais"
+                value={(() => {
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  return dashboardStats.totalBookings;
+                })()}
+                change={(() => {
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  return dashboardStats.bookingsChange;
+                })()}
+                icon={CalendarDays}
+                color="blue"
+              />
+              <StatsCard
+                title="Taxa de Ocupação"
+                value={`${(() => {
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  return dashboardStats.occupancyRate.toFixed(0);
+                })()}%`}
+                icon={Percent}
+                color="yellow"
+              />
+              <StatsCard
+                title="Valor Médio"
+                value={formatCurrency((() => {
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  return dashboardStats.avgBookingValue;
+                })())}
+                icon={Users}
+                color="primary"
+              />
             </div>
-            <div className="bg-card border border-border rounded-sm p-6">
-              <h3 className="font-display text-lg font-semibold text-foreground mb-4">Taxa de Ocupação</h3>
-              <p className="font-display text-3xl font-bold text-primary">{bookings.length > 0 ? "Em tempo real" : "N/A"}</p>
-              <p className="font-body text-sm text-muted-foreground mt-1">Baseado em reservas activas</p>
+
+            {/* Charts Row 1 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <RevenueChart data={getMonthlyRevenueData(bookings)} />
+              <BookingsChart data={getMonthlyRevenueData(bookings)} />
             </div>
-            <div className="bg-card border border-border rounded-sm p-6">
-              <h3 className="font-display text-lg font-semibold text-foreground mb-4">Reservas Totais</h3>
-              <p className="font-display text-3xl font-bold text-foreground">{stats.total}</p>
-              <p className="font-body text-sm text-muted-foreground mt-1">Desde o início</p>
+
+            {/* Charts Row 2 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <StatusDistributionChart data={getStatusDistribution(bookings)} />
+              <OccupancyRateChart apartments={getOccupancyByApartment(bookings, apartmentsList)} />
             </div>
-            <div className="bg-card border border-border rounded-sm p-6">
-              <h3 className="font-display text-lg font-semibold text-foreground mb-4">Status Pendente</h3>
-              <p className="font-display text-xl font-bold text-foreground">{stats.pendentes}</p>
-              <p className="font-body text-sm text-muted-foreground mt-1">Aguardam acção</p>
+
+            {/* Top Apartments */}
+            <TopApartmentsChart apartments={getTopApartments(bookings, apartmentsList)} />
+          </div>
+        )}
+
+        {activeTab === "usuarios" && can("MANAGE_USERS") && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="bg-card border border-border rounded-sm p-6">
+                <h2 className="font-display text-xl font-semibold text-foreground mb-4">Novo Utilizador</h2>
+                <form onSubmit={handleCreateUser} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Nome</Label>
+                    <Input
+                      value={userForm.nome}
+                      onChange={(e) => setUserForm({ ...userForm, nome: e.target.value })}
+                      placeholder="Ex: Ana Costa"
+                      required
+                      className="bg-muted border-border"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>E-mail</Label>
+                    <Input
+                      type="email"
+                      value={userForm.email}
+                      onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                      placeholder="ana@roomview.com"
+                      required
+                      className="bg-muted border-border"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Perfil</Label>
+                    <Select
+                      value={userForm.role}
+                      onValueChange={(value) => setUserForm({ ...userForm, role: value as UserRole })}
+                    >
+                      <SelectTrigger className="bg-muted border-border">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-border">
+                        <SelectItem value="ADMIN">ADMIN</SelectItem>
+                        <SelectItem value="GERENTE">GERENTE</SelectItem>
+                        <SelectItem value="OPERADOR">OPERADOR</SelectItem>
+                        <SelectItem value="CLIENTE">CLIENTE</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full bg-gradient-gold text-primary-foreground font-body">
+                    <Plus className="w-4 h-4 mr-2" /> Criar Utilizador
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    Password padrao: 123456
+                  </p>
+                </form>
+              </div>
+
+              <div className="lg:col-span-2 bg-card border border-border rounded-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                  <div>
+                    <h2 className="font-display text-xl font-semibold text-foreground">Utilizadores</h2>
+                    <p className="text-xs text-muted-foreground">Gestao de perfis com permissao de acesso</p>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Total: <span className="text-foreground font-semibold">{users.length}</span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-muted">
+                      <tr>
+                        {['Nome', 'E-mail', 'Perfil', 'Acoes'].map((h) => (
+                          <th key={h} className="text-left px-4 py-3 font-body text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {users.map((u) => (
+                        <tr key={u.id} className="hover:bg-muted/50 transition-colors">
+                          <td className="px-4 py-3 font-body text-sm text-foreground">
+                            <div className="flex flex-col">
+                              <span className="font-medium">{u.nome}</span>
+                              {currentUser?.id === u.id && (
+                                <span className="text-[10px] text-muted-foreground">Este e voce</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-body text-sm text-muted-foreground">{u.email}</td>
+                          <td className="px-4 py-3">
+                            <span className={`font-body text-[10px] font-semibold uppercase px-2 py-0.5 rounded-sm border ${getRoleBadgeColor(u.role)}`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleDeleteUser(u.id)}
+                                className="p-1 hover:text-destructive transition-colors disabled:opacity-40"
+                                title="Eliminar"
+                                disabled={currentUser?.id === u.id}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
+        )}
+
+        {activeTab === "perfil" && currentUser && (
+          <PermissionsHelp 
+            userRole={currentUser.role} 
+            permissions={ROLE_PERMISSIONS[currentUser.role]} 
+          />
         )}
       </main>
 
       {/* Extras Modal */}
       {isAddingExtra && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-card border border-border p-6 rounded-sm w-full max-w-md shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-display text-xl font-bold text-foreground">Adicionar Pedido Extra</h3>
-              <button onClick={() => setIsAddingExtra(false)} className="text-muted-foreground hover:text-foreground"><CloseX className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleAddExtra} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Item (Comida, Bebida, etc.)</Label>
-                <Input value={extraItem} onChange={(e) => setExtraItem(e.target.value)} placeholder="Ex: Garrafa de Água" required className="bg-muted border-border" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Quantidade</Label>
-                  <Input type="number" min="1" value={extraQty} onChange={(e) => setExtraQty(Number(e.target.value))} required className="bg-muted border-border" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Preço Unitário (AKZ)</Label>
-                  <Input type="number" min="0" value={extraPrice} onChange={(e) => setExtraPrice(Number(e.target.value))} required className="bg-muted border-border" />
-                </div>
-              </div>
-              <Button type="submit" className="w-full bg-primary text-primary-foreground font-body font-bold py-6 mt-4">Confirmar Pedido</Button>
-            </form>
-          </motion.div>
-        </div>
+        <ExtrasManager
+          onAddExtra={handleAddExtra}
+          onClose={() => setIsAddingExtra(false)}
+        />
       )}
 
       {/* Receipt Modal */}

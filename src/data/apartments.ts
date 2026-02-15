@@ -53,6 +53,7 @@ export interface Booking {
   created_at: string; // ISO format
   pessoas: number;
   checkin_real?: string; // ISO format
+  checkout_real?: string; // ISO format
   extras?: BookingExtra[];
   expires_at: string; // ISO format (created_at + 2h)
   metodo_pagamento?: PaymentMethod;

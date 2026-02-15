@@ -1,16 +1,19 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Users, BedDouble, Bath, Maximize, MapPin, Shield, Sparkles } from "lucide-react";
+import { ArrowLeft, Users, BedDouble, Bath, Maximize, MapPin, Shield, Sparkles, Images } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { formatCurrency, BOOKING_DEPOSIT } from "@/data/apartments";
 import { apartmentService } from "@/lib/apartmentService";
+import { PhotoGalleryModal } from "@/components/PhotoGallery";
+import { useState } from "react";
 
 const ApartmentDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const apartments = apartmentService.getApartments();
   const apartment = apartments.find((a) => a.id === id);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
 
   if (!apartment) {
     return (
@@ -28,9 +31,24 @@ const ApartmentDetail = () => {
       <Header />
       <main className="pt-20">
         {/* Hero image */}
-        <div className="relative h-[50vh] min-h-[400px]">
+        <div className="relative h-[50vh] min-h-[400px] group cursor-pointer" onClick={() => setIsGalleryOpen(true)}>
           <img src={apartment.fotos[0]} alt={apartment.nome} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent" />
+          
+          {/* Gallery Button Overlay */}
+          {apartment.fotos.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsGalleryOpen(true);
+              }}
+              className="absolute bottom-4 right-4 bg-black/70 hover:bg-black/90 text-white px-4 py-2 rounded-sm backdrop-blur-sm transition-all flex items-center gap-2 opacity-0 group-hover:opacity-100"
+            >
+              <Images className="w-4 h-4" />
+              <span className="text-sm font-medium">Ver Galeria ({apartment.fotos.length} fotos)</span>
+            </button>
+          )}
+
           <div className="absolute bottom-0 left-0 right-0 p-8">
             <div className="container mx-auto">
               <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-primary font-body text-sm mb-4 hover:underline">
@@ -137,6 +155,16 @@ const ApartmentDetail = () => {
           </div>
         </div>
       </main>
+      
+      {/* Photo Gallery Modal */}
+      {isGalleryOpen && (
+        <PhotoGalleryModal
+          photos={apartment.fotos}
+          apartmentName={apartment.nome}
+          onClose={() => setIsGalleryOpen(false)}
+        />
+      )}
+
       <Footer />
     </div>
   );

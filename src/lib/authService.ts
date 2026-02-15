@@ -59,6 +59,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     ]
 };
 
+export { ROLE_PERMISSIONS };
+
 const STORAGE_KEY = "roomview_users";
 const SESSION_KEY = "roomview_session";
 
@@ -98,6 +100,34 @@ export const authService = {
 
     logout(): void {
         localStorage.removeItem(SESSION_KEY);
+    },
+
+    addUser(user: Omit<User, "id">): User | null {
+        const users = this.getUsers();
+        const alreadyExists = users.some(u => u.email.toLowerCase() === user.email.toLowerCase());
+        if (alreadyExists) {
+            return null;
+        }
+
+        const newUser: User = {
+            id: `u${Date.now()}`,
+            ...user,
+            password: user.password ?? "123456"
+        };
+
+        const nextUsers = [...users, newUser];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUsers));
+        return newUser;
+    },
+
+    deleteUser(id: string): boolean {
+        const users = this.getUsers();
+        const nextUsers = users.filter(u => u.id !== id);
+        if (nextUsers.length === users.length) {
+            return false;
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUsers));
+        return true;
     },
 
     hasPermission(user: User, permission: Permission): boolean {

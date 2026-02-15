@@ -1,5 +1,5 @@
 import { Booking, BookingStatus, BOOKING_DEPOSIT, BookingExtra, PaymentMethod } from "@/data/apartments";
-import { parseISO, areIntervalsOverlapping, addHours, isAfter } from "date-fns";
+import { parseISO, areIntervalsOverlapping, addHours, isAfter, endOfDay, isSameDay } from "date-fns";
 
 const STORAGE_KEY = "roomview_bookings";
 
@@ -18,6 +18,20 @@ export const bookingService = {
                 changed = true;
                 return { ...b, status: "EXPIRADA" as BookingStatus };
             }
+
+            const isActive = !["FINALIZADA", "CANCELADA", "EXPIRADA"].includes(b.status);
+            const isFullyPaid = (b.restante_pagar ?? 0) === 0;
+            const checkoutDate = parseISO(b.checkout);
+            const shouldFinalize = isSameDay(now, checkoutDate) || isAfter(now, checkoutDate);
+            if (isActive && isFullyPaid && shouldFinalize) {
+                changed = true;
+                return {
+                    ...b,
+                    status: "FINALIZADA" as BookingStatus,
+                    checkout_real: now.toISOString()
+                };
+            }
+
             return b;
         });
 
@@ -143,7 +157,15 @@ export const bookingService = {
 
         if (index === -1) return false;
 
-        bookings[index].restante_pagar = 0;
+        const booking = bookings[index];
+        booking.restante_pagar = 0;
+
+        const now = new Date();
+        const checkoutDate = parseISO(booking.checkout);
+        if (isSameDay(now, checkoutDate) || isAfter(now, checkoutDate)) {
+            booking.status = "FINALIZADA" as BookingStatus;
+            booking.checkout_real = now.toISOString();
+        }
         this.saveBookings(bookings);
         return true;
     },
