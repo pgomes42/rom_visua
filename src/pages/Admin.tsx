@@ -335,7 +335,37 @@ const Admin = () => {
           <div className="bg-card border border-border p-8 rounded-sm shadow-xl">
             <h2 className="font-display text-xl font-semibold text-foreground mb-6 text-center italic underline underline-offset-8 decoration-primary/30">Autenticação</h2>
             
-            {/* DEV Mode Helper */}
+            {/* Seed Data Helper */}
+            <div className="mb-6 p-4 bg-muted/50 border border-border rounded-sm">
+              <p className="text-xs font-semibold text-primary mb-2 uppercase tracking-wider">📊 Dados de Demonstração</p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    const count = 50;
+                    seedBookings(count);
+                    setBookings(bookingService.getBookings());
+                    toast.success(`${count} reservas de teste geradas!`);
+                  }}
+                  className="w-full text-xs px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded hover:bg-yellow-500/30 transition font-medium"
+                >
+                  🌱 Gerar 50 Reservas de Teste
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Tem a certeza que deseja limpar TODAS as reservas?')) {
+                      clearAllBookings();
+                      setBookings([]);
+                      toast.info('Todas as reservas foram removidas');
+                    }
+                  }}
+                  className="w-full text-xs px-3 py-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition font-medium"
+                >
+                  🗑️ Limpar Todas as Reservas
+                </button>
+              </div>
+            </div>
+
+            {/* DEV Mode Quick Login */}
             {import.meta.env.DEV && (
               <div className="mb-6 p-4 bg-muted/50 border border-border rounded-sm">
                 <p className="text-xs font-semibold text-primary mb-2 uppercase tracking-wider">🔧 Modo Desenvolvimento</p>
@@ -374,34 +404,6 @@ const Admin = () => {
                       className="text-[10px] px-2 py-1 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition"
                     >
                       Preencher
-                    </button>
-                  </div>
-                  
-                  {/* Seed Data Buttons */}
-                  <div className="mt-4 pt-4 border-t border-border space-y-2">
-                    <p className="text-xs font-semibold text-yellow-400 mb-2 uppercase tracking-wider">📊 Dados de Teste</p>
-                    <button
-                      onClick={() => {
-                        const count = 50;
-                        seedBookings(count);
-                        setBookings(bookingService.getBookings());
-                        toast.success(`${count} reservas de teste geradas!`);
-                      }}
-                      className="w-full text-xs px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded hover:bg-yellow-500/30 transition font-medium"
-                    >
-                      🌱 Gerar 50 Reservas de Teste
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm('Tem a certeza que deseja limpar TODAS as reservas?')) {
-                          clearAllBookings();
-                          setBookings([]);
-                          toast.info('Todas as reservas foram removidas');
-                        }
-                      }}
-                      className="w-full text-xs px-3 py-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition font-medium"
-                    >
-                      🗑️ Limpar Todas as Reservas
                     </button>
                   </div>
                 </div>
