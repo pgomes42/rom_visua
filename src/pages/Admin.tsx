@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { LayoutDashboard, CalendarDays, Building2, BarChart3, LogIn, LogOut, ClipboardList, Check, X, RefreshCcw, Plus, Edit2, Trash2, Save, X as CloseX, CheckCircle, Shield, DollarSign, Users, Percent } from "lucide-react";
-import { Apartment, BookingStatus, Booking, formatCurrency } from "@/data/apartments";
+import { LayoutDashboard, CalendarDays, Building2, BarChart3, LogIn, LogOut, ClipboardList, Check, X, RefreshCcw, Plus, Edit2, Trash2, Save, X as CloseX, CheckCircle, Shield, DollarSign, Users, Percent, FileText } from "lucide-react";
+import { Apartment, BookingStatus, Booking, formatCurrency, RemainingPaymentMethod } from "@/data/apartments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apartmentService } from "@/lib/apartmentService";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { bookingService } from "@/lib/bookingService";
 import { authService, User, UserRole, Permission, ROLE_PERMISSIONS } from "@/lib/authService";
 import { format, parseISO, isSameDay, endOfDay, isAfter } from "date-fns";
@@ -17,6 +18,7 @@ import logo from "@/assets/logo.svg";
 import { useSearchParams } from "react-router-dom";
 import PermissionsHelp from "@/components/PermissionsHelp";
 import ExtrasManager, { ExtraItem } from "@/components/ExtrasManager";
+import ReportGenerator from "@/components/ReportGenerator";
 import { 
   StatsCard, 
   RevenueChart, 
@@ -30,7 +32,8 @@ import {
   getMonthlyRevenueData, 
   getStatusDistribution, 
   getOccupancyByApartment, 
-  getTopApartments 
+  getTopApartments,
+  StatisticsFilters 
 } from "@/lib/statisticsService";
 import { seedBookings, clearAllBookings } from "@/lib/seedData";
 
@@ -43,7 +46,7 @@ const statusColors: Record<string, string> = {
   EXPIRADA: "bg-muted text-muted-foreground",
 };
 
-type Tab = "reservas" | "apartamentos" | "estatisticas" | "usuarios" | "perfil";
+type Tab = "reservas" | "apartamentos" | "estatisticas" | "relatorios" | "usuarios" | "perfil";
 
 const Admin = () => {
   const [searchParams] = useSearchParams();
@@ -63,6 +66,17 @@ const Admin = () => {
   });
   const [showAllBookings, setShowAllBookings] = useState(false);
   const [bookingSearch, setBookingSearch] = useState("");
+
+  // Statistics filters
+  const [statsDateFrom, setStatsDateFrom] = useState<string>("");
+  const [statsDateTo, setStatsDateTo] = useState<string>("");
+  const [statsApartmentType, setStatsApartmentType] = useState<string>("");
+  const [statsApartmentId, setStatsApartmentId] = useState<string>("");
+
+  // Payment method modal
+  const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
+  const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<RemainingPaymentMethod>("DINHEIRO");
 
   useEffect(() => {
     const user = authService.getCurrentUser();
@@ -211,6 +225,36 @@ const Admin = () => {
 
   const can = (permission: any) => currentUser ? authService.hasPermission(currentUser, permission) : false;
 
+  // Build statistics filters object
+  const getStatisticsFilters = (): StatisticsFilters => {
+    const filters: StatisticsFilters = {};
+    
+    if (statsDateFrom) {
+      filters.dateFrom = new Date(statsDateFrom);
+    }
+    if (statsDateTo) {
+      filters.dateTo = new Date(statsDateTo);
+    }
+    if (statsApartmentType) {
+      filters.apartmentType = statsApartmentType;
+    }
+    if (statsApartmentId) {
+      filters.apartmentId = statsApartmentId;
+    }
+    
+    return filters;
+  };
+
+  const handleClearFilters = () => {
+    setStatsDateFrom("");
+    setStatsDateTo("");
+    setStatsApartmentType("");
+    setStatsApartmentId("");
+  };
+
+  // Get unique apartment types
+  const apartmentTypes = Array.from(new Set(apartmentsList.map(apt => apt.tipologia))).sort();
+
   const handleStatusUpdate = (id: string, status: BookingStatus) => {
     const success = bookingService.updateBookingStatus(id, status);
     if (success) {
@@ -222,16 +266,28 @@ const Admin = () => {
   };
 
   const handleCheckin = (id: string) => {
-    if (bookingService.registerCheckin(id)) {
+    if (bookingService.registerCheckin(id, currentUser?.email)) {
       setBookings(bookingService.getBookings());
       toast.success("Check-in registado com sucesso!");
     }
   };
 
-  const handleRegisterPayment = (id: string) => {
-    if (bookingService.registerRemainingPayment(id)) {
+  const handleRegisterPayment = (booking: Booking) => {
+    setSelectedBookingForPayment(booking);
+    setSelectedPaymentMethod("DINHEIRO");
+    setShowPaymentMethodDialog(true);
+  };
+
+  const confirmPayment = () => {
+    if (selectedBookingForPayment && bookingService.registerRemainingPayment(
+      selectedBookingForPayment.id, 
+      currentUser?.email,
+      selectedPaymentMethod
+    )) {
       setBookings(bookingService.getBookings());
       toast.success("Pagamento de saldo registado com sucesso!");
+      setShowPaymentMethodDialog(false);
+      setSelectedBookingForPayment(null);
     }
   };
 
@@ -452,6 +508,7 @@ const Admin = () => {
     { id: "reservas" as Tab, label: "Reservas", icon: CalendarDays },
     { id: "apartamentos" as Tab, label: "Apartamentos", icon: Building2 },
     { id: "estatisticas" as Tab, label: "Estatísticas", icon: BarChart3 },
+    { id: "relatorios" as Tab, label: "Relatórios", icon: FileText },
     { id: "usuarios" as Tab, label: "Usuarios", icon: Users },
     { id: "perfil" as Tab, label: "Perfil", icon: Shield },
   ];
@@ -476,6 +533,7 @@ const Admin = () => {
             {tabs.filter(tab => {
               if (tab.id === "apartamentos") return can("MANAGE_APARTMENTS");
               if (tab.id === "estatisticas") return can("VIEW_FINANCIALS");
+              if (tab.id === "relatorios") return can("VIEW_FINANCIALS");
               if (tab.id === "usuarios") return can("MANAGE_USERS");
               return true;
             }).map((tab) => (
@@ -525,6 +583,7 @@ const Admin = () => {
           {tabs.filter(tab => {
             if (tab.id === "apartamentos") return can("MANAGE_APARTMENTS");
             if (tab.id === "estatisticas") return can("VIEW_FINANCIALS");
+            if (tab.id === "relatorios") return can("VIEW_FINANCIALS");
             if (tab.id === "usuarios") return can("MANAGE_USERS");
             return true;
           }).map((tab) => (
@@ -645,6 +704,13 @@ const Admin = () => {
                           </td>
                           <td className="px-4 py-3 font-body text-sm text-destructive font-medium">
                             {formatCurrency(r.restante_pagar ?? 0)}
+                            {r.metodo_pagamento_saldo && (
+                              <span className="block text-[10px] text-muted-foreground mt-1">
+                                {r.metodo_pagamento_saldo === "DINHEIRO" && "💵 Dinheiro"}
+                                {r.metodo_pagamento_saldo === "TRANSFERENCIA" && "🏦 Transferência"}
+                                {r.metodo_pagamento_saldo === "TPA" && "💳 TPA"}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -676,11 +742,7 @@ const Admin = () => {
                               )}
                               {r.restante_pagar > 0 && (r.status === "CONFIRMADA" || r.status === "CHECKIN_REALIZADO") && can("MANAGE_BOOKINGS") && (
                                 <button
-                                  onClick={() => {
-                                    if (window.confirm(`Confirmar recebimento de ${formatCurrency(r.restante_pagar)}?`)) {
-                                      handleRegisterPayment(r.id);
-                                    }
-                                  }}
+                                  onClick={() => handleRegisterPayment(r)}
                                   className="p-1 hover:text-green-500 transition-colors"
                                   title="Liquidar Saldo"
                                 >
@@ -943,16 +1005,97 @@ const Admin = () => {
 
         {activeTab === "estatisticas" && (
           <div className="space-y-6">
+            {/* Filters Section */}
+            <div className="bg-card border border-border rounded-sm p-6 shadow-sm">
+              <h3 className="font-display text-lg font-bold text-foreground mb-4">Filtros de Relatório</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dateFrom">Data Inicial</Label>
+                  <Input
+                    id="dateFrom"
+                    type="date"
+                    value={statsDateFrom}
+                    onChange={(e) => setStatsDateFrom(e.target.value)}
+                    className="bg-muted border-border"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dateTo">Data Final</Label>
+                  <Input
+                    id="dateTo"
+                    type="date"
+                    value={statsDateTo}
+                    onChange={(e) => setStatsDateTo(e.target.value)}
+                    className="bg-muted border-border"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="apartmentType">Tipologia</Label>
+                  <Select
+                    value={statsApartmentType || undefined}
+                    onValueChange={(value) => setStatsApartmentType(value)}
+                  >
+                    <SelectTrigger id="apartmentType" className="bg-muted border-border">
+                      <SelectValue placeholder="Todas as tipologias" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      {apartmentTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="apartmentId">Quarto</Label>
+                  <Select
+                    value={statsApartmentId || undefined}
+                    onValueChange={(value) => setStatsApartmentId(value)}
+                  >
+                    <SelectTrigger id="apartmentId" className="bg-muted border-border">
+                      <SelectValue placeholder="Todos os quartos" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      {apartmentsList
+                        .filter(apt => !statsApartmentType || apt.tipologia === statsApartmentType)
+                        .sort((a, b) => a.nome.localeCompare(b.nome))
+                        .map((apt) => (
+                          <SelectItem key={apt.id} value={apt.id.toString()}>
+                            {apt.nome}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {(statsDateFrom || statsDateTo || statsApartmentType || statsApartmentId) && (
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearFilters}
+                    className="gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Limpar Filtros
+                  </Button>
+                </div>
+              )}
+            </div>
+
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatsCard
                 title="Receita Total"
                 value={formatCurrency((() => {
-                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  const filters = getStatisticsFilters();
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList, filters);
                   return dashboardStats.totalRevenue;
                 })())}
                 change={(() => {
-                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  const filters = getStatisticsFilters();
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList, filters);
                   return dashboardStats.revenueChange;
                 })()}
                 icon={DollarSign}
@@ -961,11 +1104,13 @@ const Admin = () => {
               <StatsCard
                 title="Reservas Totais"
                 value={(() => {
-                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  const filters = getStatisticsFilters();
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList, filters);
                   return dashboardStats.totalBookings;
                 })()}
                 change={(() => {
-                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  const filters = getStatisticsFilters();
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList, filters);
                   return dashboardStats.bookingsChange;
                 })()}
                 icon={CalendarDays}
@@ -974,7 +1119,8 @@ const Admin = () => {
               <StatsCard
                 title="Taxa de Ocupação"
                 value={`${(() => {
-                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  const filters = getStatisticsFilters();
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList, filters);
                   return dashboardStats.occupancyRate.toFixed(0);
                 })()}%`}
                 icon={Percent}
@@ -983,7 +1129,8 @@ const Admin = () => {
               <StatsCard
                 title="Valor Médio"
                 value={formatCurrency((() => {
-                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList);
+                  const filters = getStatisticsFilters();
+                  const dashboardStats = calculateDashboardStats(bookings, apartmentsList, filters);
                   return dashboardStats.avgBookingValue;
                 })())}
                 icon={Users}
@@ -993,19 +1140,23 @@ const Admin = () => {
 
             {/* Charts Row 1 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <RevenueChart data={getMonthlyRevenueData(bookings)} />
-              <BookingsChart data={getMonthlyRevenueData(bookings)} />
+              <RevenueChart data={getMonthlyRevenueData(bookings, apartmentsList, getStatisticsFilters())} />
+              <BookingsChart data={getMonthlyRevenueData(bookings, apartmentsList, getStatisticsFilters())} />
             </div>
 
             {/* Charts Row 2 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <StatusDistributionChart data={getStatusDistribution(bookings)} />
-              <OccupancyRateChart apartments={getOccupancyByApartment(bookings, apartmentsList)} />
+              <StatusDistributionChart data={getStatusDistribution(bookings, apartmentsList, getStatisticsFilters())} />
+              <OccupancyRateChart apartments={getOccupancyByApartment(bookings, apartmentsList, getStatisticsFilters())} />
             </div>
 
             {/* Top Apartments */}
-            <TopApartmentsChart apartments={getTopApartments(bookings, apartmentsList)} />
+            <TopApartmentsChart apartments={getTopApartments(bookings, apartmentsList, getStatisticsFilters())} />
           </div>
+        )}
+
+        {activeTab === "relatorios" && can("VIEW_FINANCIALS") && (
+          <ReportGenerator bookings={bookings} apartments={apartmentsList} />
         )}
 
         {activeTab === "usuarios" && can("MANAGE_USERS") && (
@@ -1271,6 +1422,64 @@ const Admin = () => {
           </motion.div>
         </div>
       )}
+
+      {/* Payment Method Dialog */}
+      <Dialog open={showPaymentMethodDialog} onOpenChange={setShowPaymentMethodDialog}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="font-display text-foreground">Confirmar Pagamento do Saldo</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {selectedBookingForPayment && (
+                <>
+                  <p className="mb-2">
+                    Reserva: <strong>{selectedBookingForPayment.id}</strong>
+                  </p>
+                  <p className="mb-4">
+                    Valor a receber: <strong className="text-primary">{formatCurrency(selectedBookingForPayment.restante_pagar)}</strong>
+                  </p>
+                </>
+              )}
+              Selecione a forma de pagamento utilizada pelo cliente:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="paymentMethod">Forma de Pagamento</Label>
+              <Select
+                value={selectedPaymentMethod}
+                onValueChange={(value) => setSelectedPaymentMethod(value as RemainingPaymentMethod)}
+              >
+                <SelectTrigger id="paymentMethod" className="bg-muted border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="DINHEIRO">💵 Dinheiro (Cash)</SelectItem>
+                  <SelectItem value="TRANSFERENCIA">🏦 Transferência Bancária</SelectItem>
+                  <SelectItem value="TPA">💳 TPA (Máquina de Cartão)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPaymentMethodDialog(false)}
+              className="mr-2"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={confirmPayment}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Confirmar Pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -2,6 +2,13 @@ import { Booking, Apartment } from '@/data/apartments';
 import { startOfMonth, endOfMonth, format, subMonths, isWithinInterval, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+export interface StatisticsFilters {
+    dateFrom?: Date;
+    dateTo?: Date;
+    apartmentType?: string;
+    apartmentId?: string;
+}
+
 export interface DashboardStats {
     totalRevenue: number;
     totalBookings: number;
@@ -23,7 +30,41 @@ export interface StatusData {
     color: string;
 }
 
-export const calculateDashboardStats = (bookings: Booking[], apartments: Apartment[]): DashboardStats => {
+const applyFilters = (bookings: Booking[], apartments: Apartment[], filters: StatisticsFilters): Booking[] => {
+    let filtered = [...bookings];
+
+    // Filter by date range
+    if (filters.dateFrom || filters.dateTo) {
+        filtered = filtered.filter(b => {
+            const bookingDate = parseISO(b.checkin);
+            if (filters.dateFrom && bookingDate < filters.dateFrom) return false;
+            if (filters.dateTo && bookingDate > filters.dateTo) return false;
+            return true;
+        });
+    }
+
+    // Filter by apartment type
+    if (filters.apartmentType) {
+        const typeApartmentIds = apartments
+            .filter(apt => apt.tipologia === filters.apartmentType)
+            .map(apt => apt.id);
+        filtered = filtered.filter(b => typeApartmentIds.includes(b.apartment_id));
+    }
+
+    // Filter by specific apartment
+    if (filters.apartmentId) {
+        filtered = filtered.filter(b => b.apartment_id === filters.apartmentId);
+    }
+
+    return filtered;
+};
+
+export const calculateDashboardStats = (
+    bookings: Booking[], 
+    apartments: Apartment[], 
+    filters: StatisticsFilters = {}
+): DashboardStats => {
+    const filteredBookings = applyFilters(bookings, apartments, filters);
     const now = new Date();
     const currentMonthStart = startOfMonth(now);
     const currentMonthEnd = endOfMonth(now);
@@ -31,7 +72,7 @@ export const calculateDashboardStats = (bookings: Booking[], apartments: Apartme
     const lastMonthEnd = endOfMonth(subMonths(now, 1));
 
     // Current month stats
-    const currentMonthBookings = bookings.filter(b => {
+    const currentMonthBookings = filteredBookings.filter(b => {
         const bookingDate = parseISO(b.checkin);
         return isWithinInterval(bookingDate, { start: currentMonthStart, end: currentMonthEnd });
     });
@@ -40,7 +81,7 @@ export const calculateDashboardStats = (bookings: Booking[], apartments: Apartme
     const currentMonthCount = currentMonthBookings.length;
 
     // Last month stats
-    const lastMonthBookings = bookings.filter(b => {
+    const lastMonthBookings = filteredBookings.filter(b => {
         const bookingDate = parseISO(b.checkin);
         return isWithinInterval(bookingDate, { start: lastMonthStart, end: lastMonthEnd });
     });
@@ -56,13 +97,13 @@ export const calculateDashboardStats = (bookings: Booking[], apartments: Apartme
         ? ((currentMonthCount - lastMonthCount) / lastMonthCount) * 100 
         : 0;
 
-    // Total stats (all time)
-    const totalRevenue = bookings.reduce((sum, b) => sum + b.total_estadia, 0);
-    const totalBookings = bookings.length;
+    // Total stats (filtered data)
+    const totalRevenue = filteredBookings.reduce((sum, b) => sum + b.total_estadia, 0);
+    const totalBookings = filteredBookings.length;
     const avgBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
 
     // Calculate occupancy rate
-    const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMADA' || b.status === 'FINALIZADA');
+    const confirmedBookings = filteredBookings.filter(b => b.status === 'CONFIRMADA' || b.status === 'FINALIZADA');
     const totalDays = apartments.length * 30; // Approximate for current month
     const occupiedDays = confirmedBookings.length * 2; // Approximate: 2 days average per booking
     const occupancyRate = totalDays > 0 ? (occupiedDays / totalDays) * 100 : 0;
@@ -77,7 +118,8 @@ export const calculateDashboardStats = (bookings: Booking[], apartments: Apartme
     };
 };
 
-export const getMonthlyRevenueData = (bookings: Booking[]): MonthlyData[] => {
+export const getMonthlyRevenueData = (bookings: Booking[], apartments: Apartment[], filters: StatisticsFilters = {}): MonthlyData[] => {
+    const filteredBookings = applyFilters(bookings, apartments, filters);
     const months: MonthlyData[] = [];
     const now = new Date();
 
@@ -86,7 +128,7 @@ export const getMonthlyRevenueData = (bookings: Booking[]): MonthlyData[] => {
         const monthStart = startOfMonth(monthDate);
         const monthEnd = endOfMonth(monthDate);
 
-        const monthBookings = bookings.filter(b => {
+        const monthBookings = filteredBookings.filter(b => {
             const bookingDate = parseISO(b.checkin);
             return isWithinInterval(bookingDate, { start: monthStart, end: monthEnd });
         });
@@ -104,7 +146,8 @@ export const getMonthlyRevenueData = (bookings: Booking[]): MonthlyData[] => {
     return months;
 };
 
-export const getStatusDistribution = (bookings: Booking[]): StatusData[] => {
+export const getStatusDistribution = (bookings: Booking[], apartments: Apartment[], filters: StatisticsFilters = {}): StatusData[] => {
+    const filteredBookings = applyFilters(bookings, apartments, filters);
     const statusColors = {
         PENDENTE_PAGAMENTO: '#f59e0b',
         CONFIRMADA: '#10b981',
@@ -125,7 +168,7 @@ export const getStatusDistribution = (bookings: Booking[]): StatusData[] => {
 
     const statusCounts: Record<string, number> = {};
     
-    bookings.forEach(booking => {
+    filteredBookings.forEach(booking => {
         statusCounts[booking.status] = (statusCounts[booking.status] || 0) + 1;
     });
 
@@ -136,9 +179,18 @@ export const getStatusDistribution = (bookings: Booking[]): StatusData[] => {
     }));
 };
 
-export const getOccupancyByApartment = (bookings: Booking[], apartments: Apartment[]) => {
-    return apartments.map(apt => {
-        const aptBookings = bookings.filter(
+export const getOccupancyByApartment = (bookings: Booking[], apartments: Apartment[], filters: StatisticsFilters = {}) => {
+    const filteredBookings = applyFilters(bookings, apartments, filters);
+    
+    // If filter by specific apartment, show only that one
+    const apartmentsToShow = filters.apartmentId 
+        ? apartments.filter(apt => apt.id === filters.apartmentId)
+        : filters.apartmentType
+        ? apartments.filter(apt => apt.tipologia === filters.apartmentType)
+        : apartments;
+
+    return apartmentsToShow.map(apt => {
+        const aptBookings = filteredBookings.filter(
             b => b.apartment_id === apt.id && (b.status === 'CONFIRMADA' || b.status === 'FINALIZADA')
         );
         
@@ -150,9 +202,18 @@ export const getOccupancyByApartment = (bookings: Booking[], apartments: Apartme
     });
 };
 
-export const getTopApartments = (bookings: Booking[], apartments: Apartment[]) => {
-    const aptStats = apartments.map(apt => {
-        const aptBookings = bookings.filter(b => b.apartment_id === apt.id);
+export const getTopApartments = (bookings: Booking[], apartments: Apartment[], filters: StatisticsFilters = {}) => {
+    const filteredBookings = applyFilters(bookings, apartments, filters);
+    
+    // If filter by specific apartment, show only that one
+    const apartmentsToShow = filters.apartmentId 
+        ? apartments.filter(apt => apt.id === filters.apartmentId)
+        : filters.apartmentType
+        ? apartments.filter(apt => apt.tipologia === filters.apartmentType)
+        : apartments;
+
+    const aptStats = apartmentsToShow.map(apt => {
+        const aptBookings = filteredBookings.filter(b => b.apartment_id === apt.id);
         const revenue = aptBookings.reduce((sum, b) => sum + b.total_estadia, 0);
         
         return {

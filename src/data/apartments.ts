@@ -29,6 +29,8 @@ export type BookingStatus =
 
 export type PaymentMethod = "EXPRESS" | "REFERENCIA" | "TRANSFERENCIA" | "PRESENCIAL";
 
+export type RemainingPaymentMethod = "TRANSFERENCIA" | "DINHEIRO" | "TPA";
+
 export interface BookingExtra {
   id: string;
   item: string;
@@ -54,9 +56,12 @@ export interface Booking {
   pessoas: number;
   checkin_real?: string; // ISO format
   checkout_real?: string; // ISO format
+  operador_checkin?: string; // Email do operador que fez check-in
+  operador_checkout?: string; // Email do operador que fez checkout
   extras?: BookingExtra[];
   expires_at: string; // ISO format (created_at + 2h)
   metodo_pagamento?: PaymentMethod;
+  metodo_pagamento_saldo?: RemainingPaymentMethod;
   restante_pagar: number;
 }
 

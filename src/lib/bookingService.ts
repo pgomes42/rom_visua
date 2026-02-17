@@ -1,4 +1,4 @@
-import { Booking, BookingStatus, BOOKING_DEPOSIT, BookingExtra, PaymentMethod } from "@/data/apartments";
+import { Booking, BookingStatus, BOOKING_DEPOSIT, BookingExtra, PaymentMethod, RemainingPaymentMethod } from "@/data/apartments";
 import { parseISO, areIntervalsOverlapping, addHours, isAfter, endOfDay, isSameDay } from "date-fns";
 
 const STORAGE_KEY = "roomview_bookings";
@@ -135,13 +135,16 @@ export const bookingService = {
     },
 
     // Register guest arrival
-    registerCheckin(id: string): boolean {
+    registerCheckin(id: string, operadorEmail?: string): boolean {
         const bookings = this.getBookings();
         const index = bookings.findIndex(b => b.id === id);
 
         if (index === -1) return false;
 
         bookings[index].checkin_real = new Date().toISOString();
+        if (operadorEmail) {
+            bookings[index].operador_checkin = operadorEmail;
+        }
         if (bookings[index].status === "CONFIRMADA") {
             bookings[index].status = "CHECKIN_REALIZADO";
         }
@@ -151,7 +154,7 @@ export const bookingService = {
     },
 
     // Settle the remaining balance
-    registerRemainingPayment(id: string): boolean {
+    registerRemainingPayment(id: string, operadorEmail?: string, metodo?: RemainingPaymentMethod): boolean {
         const bookings = this.getBookings();
         const index = bookings.findIndex(b => b.id === id);
 
@@ -159,13 +162,37 @@ export const bookingService = {
 
         const booking = bookings[index];
         booking.restante_pagar = 0;
+        if (metodo) {
+            booking.metodo_pagamento_saldo = metodo;
+        }
 
         const now = new Date();
         const checkoutDate = parseISO(booking.checkout);
         if (isSameDay(now, checkoutDate) || isAfter(now, checkoutDate)) {
             booking.status = "FINALIZADA" as BookingStatus;
             booking.checkout_real = now.toISOString();
+            if (operadorEmail) {
+                booking.operador_checkout = operadorEmail;
+            }
         }
+        this.saveBookings(bookings);
+        return true;
+    },
+
+    // Register checkout manually
+    registerCheckout(id: string, operadorEmail?: string): boolean {
+        const bookings = this.getBookings();
+        const index = bookings.findIndex(b => b.id === id);
+
+        if (index === -1) return false;
+
+        const booking = bookings[index];
+        booking.checkout_real = new Date().toISOString();
+        booking.status = "FINALIZADA" as BookingStatus;
+        if (operadorEmail) {
+            booking.operador_checkout = operadorEmail;
+        }
+
         this.saveBookings(bookings);
         return true;
     },
