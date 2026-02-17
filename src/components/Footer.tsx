@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { MapPin, Phone, Mail } from "lucide-react";
 import logo from "@/assets/logo.svg";
+import { HOTEL_INFO } from "@/data/apartments";
 
 const Footer = () => {
   return (
@@ -30,9 +31,9 @@ const Footer = () => {
           <div>
             <h4 className="font-display text-lg font-semibold text-foreground mb-6">Contacto</h4>
             <div className="flex flex-col gap-4">
-              <a href="#" className="flex items-start gap-3 text-sm text-muted-foreground hover:text-primary transition-colors font-body">
+              <a href={HOTEL_INFO.googlemaps_url} target="_blank" rel="noopener noreferrer" className="flex items-start gap-3 text-sm text-muted-foreground hover:text-primary transition-colors font-body">
                 <MapPin className="w-4 h-4 mt-0.5 text-primary flex-shrink-0" />
-                Patriota, Luanda — Angola
+                {HOTEL_INFO.endereco}
               </a>
               <a href="tel:+244923000000" className="flex items-center gap-3 text-sm text-muted-foreground hover:text-primary transition-colors font-body">
                 <Phone className="w-4 h-4 text-primary flex-shrink-0" />

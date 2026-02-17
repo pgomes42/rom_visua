@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Users, BedDouble, Bath, Maximize, MapPin, Shield, Sparkles, Images } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { formatCurrency, BOOKING_DEPOSIT } from "@/data/apartments";
+import { formatCurrency, BOOKING_DEPOSIT, HOTEL_INFO } from "@/data/apartments";
 import { apartmentService } from "@/lib/apartmentService";
 import { PhotoGalleryModal } from "@/components/PhotoGallery";
 import { useState } from "react";
@@ -108,7 +108,14 @@ const ApartmentDetail = () => {
                 <MapPin className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-body text-sm font-medium text-foreground">{apartment.localizacao}</p>
-                  <p className="font-body text-xs text-muted-foreground">Localização central com acesso facilitado</p>
+                  <a 
+                    href={HOTEL_INFO.googlemaps_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-body text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    Ver localização no mapa
+                  </a>
                 </div>
               </div>
             </div>

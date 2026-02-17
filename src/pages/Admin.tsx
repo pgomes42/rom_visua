@@ -9,6 +9,7 @@ import { apartmentService } from "@/lib/apartmentService";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerClose } from "@/components/ui/drawer";
 import { bookingService } from "@/lib/bookingService";
 import { authService, User, UserRole, Permission, ROLE_PERMISSIONS } from "@/lib/authService";
 import { format, parseISO, isSameDay, endOfDay, isAfter } from "date-fns";
@@ -62,10 +63,12 @@ const Admin = () => {
   const [userForm, setUserForm] = useState({
     nome: "",
     email: "",
-    role: "OPERADOR" as UserRole
+    role: "OPERADOR" as UserRole,
+    customPermissions: [] as Permission[]
   });
   const [showAllBookings, setShowAllBookings] = useState(false);
   const [bookingSearch, setBookingSearch] = useState("");
+  const [showOnlyPendingCheckout, setShowOnlyPendingCheckout] = useState(false);
 
   // Statistics filters
   const [statsDateFrom, setStatsDateFrom] = useState<string>("");
@@ -77,6 +80,16 @@ const Admin = () => {
   const [showPaymentMethodDialog, setShowPaymentMethodDialog] = useState(false);
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<RemainingPaymentMethod>("DINHEIRO");
+
+  // Booking detail panel
+  const [showBookingDetailPanel, setShowBookingDetailPanel] = useState(false);
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<Booking | null>(null);
+  const [isAddingExtraDetail, setIsAddingExtraDetail] = useState(false);
+  const [extraDetailForm, setExtraDetailForm] = useState({
+    item: "",
+    quantidade: 1,
+    preco_unitario: 0
+  });
 
   useEffect(() => {
     const user = authService.getCurrentUser();
@@ -140,6 +153,11 @@ const Admin = () => {
         || telefone.includes(normalizedSearch);
     })
     : bookingsToDisplay;
+  
+  // Filtrar apenas reservas sem checkout se o filtro estiver ativo
+  const finalFilteredBookings = showOnlyPendingCheckout
+    ? filteredBookings.filter(b => !b.checkout_real && (b.status === "CHECKIN_REALIZADO" || b.status === "CONFIRMADA"))
+    : filteredBookings;
 
   // Apartment Form State
   const [isEditingApt, setIsEditingApt] = useState(false);
@@ -193,7 +211,8 @@ const Admin = () => {
     const created = authService.addUser({
       nome: userForm.nome.trim(),
       email: userForm.email.trim(),
-      role: userForm.role
+      role: userForm.role,
+      customPermissions: userForm.customPermissions.length > 0 ? userForm.customPermissions : undefined
     });
 
     if (!created) {
@@ -202,7 +221,7 @@ const Admin = () => {
     }
 
     setUsers(authService.getUsers());
-    setUserForm({ nome: "", email: "", role: "OPERADOR" });
+    setUserForm({ nome: "", email: "", role: "OPERADOR", customPermissions: [] });
     toast.success("Utilizador criado. Password padrao: 123456");
   };
 
@@ -266,16 +285,100 @@ const Admin = () => {
   };
 
   const handleCheckin = (id: string) => {
-    if (bookingService.registerCheckin(id, currentUser?.email)) {
+    const bookings = bookingService.getBookings();
+    const index = bookings.findIndex(b => b.id === id);
+    
+    if (index !== -1) {
+      // Registar com a hora atual
+      bookings[index].checkin_real = new Date().toISOString();
+      bookings[index].operador_checkin = currentUser?.email;
+      if (bookings[index].status === "CONFIRMADA") {
+        bookings[index].status = "CHECKIN_REALIZADO";
+      }
+      
+      bookingService.saveBookings(bookings);
       setBookings(bookingService.getBookings());
-      toast.success("Check-in registado com sucesso!");
+      // Atualizar painel se estiver aberto
+      if (selectedBookingDetail?.id === id) {
+        const updated = bookingService.getBookingById(id);
+        if (updated) {
+          setSelectedBookingDetail(updated);
+        }
+      }
+      toast.success("Check-in registado!");
+    }
+  };
+
+  const handleCheckout = (id: string) => {
+    const bookings = bookingService.getBookings();
+    const index = bookings.findIndex(b => b.id === id);
+    
+    if (index !== -1) {
+      const booking = bookings[index];
+      
+      // Calcular total de extras
+      const extrasTotal = (booking.extras || []).reduce((sum, e) => 
+        sum + (e.preco_unitario * e.quantidade), 0
+      );
+      
+      // Calcular saldo final: (estadia + extras) - sinal já pago
+      const totalFinal = booking.total_estadia + extrasTotal;
+      const saldoFinal = totalFinal - booking.valor_sinal;
+      
+      // Registar checkout
+      booking.checkout_real = new Date().toISOString();
+      booking.operador_checkout = currentUser?.email;
+      booking.status = "FINALIZADA";
+      booking.restante_pagar = saldoFinal > 0 ? saldoFinal : 0; // Atualizar com saldo final
+      
+      bookingService.saveBookings(bookings);
+      setBookings(bookingService.getBookings());
+      // Atualizar painel se estiver aberto
+      if (selectedBookingDetail?.id === id) {
+        const updated = bookingService.getBookingById(id);
+        if (updated) {
+          setSelectedBookingDetail(updated);
+        }
+      }
+      toast.success("Check-out registado! Conta finalizada.");
     }
   };
 
   const handleRegisterPayment = (booking: Booking) => {
+    // Só permitir pagamento se a conta estiver aberta (durante estadia) ou no checkout
+    // Atualmente impedimos pagamento durante CHECKIN_REALIZADO
+    if (booking.status === "CHECKIN_REALIZADO") {
+      toast.error("Conta aberta - Finalize no checkout para liquidar o saldo");
+      return;
+    }
+    
     setSelectedBookingForPayment(booking);
     setSelectedPaymentMethod("DINHEIRO");
     setShowPaymentMethodDialog(true);
+  };
+
+  const openBookingDetailPanel = (booking: Booking) => {
+    setSelectedBookingDetail(booking);
+    setShowBookingDetailPanel(true);
+  };
+
+  const addExtraToBookingDetail = () => {
+    if (selectedBookingDetail && extraDetailForm.item.trim()) {
+      if (bookingService.addExtra(selectedBookingDetail.id, {
+        item: extraDetailForm.item,
+        quantidade: extraDetailForm.quantidade,
+        preco_unitario: extraDetailForm.preco_unitario
+      })) {
+        const updated = bookingService.getBookingById(selectedBookingDetail.id);
+        if (updated) {
+          setSelectedBookingDetail(updated);
+          setBookings(bookingService.getBookings());
+          setExtraDetailForm({ item: "", quantidade: 1, preco_unitario: 0 });
+          setIsAddingExtraDetail(false);
+          toast.success("Serviço adicional adicionado!");
+        }
+      }
+    }
   };
 
   const confirmPayment = () => {
@@ -285,6 +388,13 @@ const Admin = () => {
       selectedPaymentMethod
     )) {
       setBookings(bookingService.getBookings());
+      // Atualizar painel de detalhes se estiver aberto
+      if (selectedBookingDetail?.id === selectedBookingForPayment.id) {
+        const updated = bookingService.getBookingById(selectedBookingForPayment.id);
+        if (updated) {
+          setSelectedBookingDetail(updated);
+        }
+      }
       toast.success("Pagamento de saldo registado com sucesso!");
       setShowPaymentMethodDialog(false);
       setSelectedBookingForPayment(null);
@@ -400,11 +510,22 @@ const Admin = () => {
                     const count = 50;
                     seedBookings(count);
                     setBookings(bookingService.getBookings());
-                    toast.success(`${count} reservas de teste geradas!`);
+                    toast.success(`${count} reservas de teste geradas com diferentes modalidades de pagamento!`);
                   }}
                   className="w-full text-xs px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded hover:bg-yellow-500/30 transition font-medium"
                 >
                   🌱 Gerar 50 Reservas de Teste
+                </button>
+                <button
+                  onClick={() => {
+                    const count = 100;
+                    seedBookings(count);
+                    setBookings(bookingService.getBookings());
+                    toast.success(`${count} reservas de teste geradas! Com modalidades: EXPRESS, REFERENCIA, TRANSFERENCIA, PRESENCIAL`);
+                  }}
+                  className="w-full text-xs px-3 py-2 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition font-medium"
+                >
+                  💰 Gerar 100 Reservas com Pagamentos Variados
                 </button>
                 <button
                   onClick={() => {
@@ -649,42 +770,57 @@ const Admin = () => {
                   />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Resultados: <span className="text-foreground font-semibold">{filteredBookings.length}</span>
+                  Resultados: <span className="text-foreground font-semibold">{finalFilteredBookings.length}</span>
                 </div>
               </div>
               {(currentUser?.role === "GERENTE" || currentUser?.role === "ADMIN") && (
                 <div className="px-4 py-3 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
                     A visualizar: <span className="text-foreground font-semibold">{showAllBookings ? "Todas as reservas" : "Reservas activas"}</span>
+                    {showOnlyPendingCheckout && <span className="text-amber-400 ml-2">🔔 Sem checkout</span>}
                   </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowAllBookings((prev) => !prev)}
-                    className="text-xs"
-                  >
-                    {showAllBookings ? "Ver apenas activas" : "Ver todas as reservas"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowOnlyPendingCheckout((prev) => !prev)}
+                      className={`text-xs ${showOnlyPendingCheckout ? "bg-amber-500/20 text-amber-500 border-amber-500" : ""}`}
+                    >
+                      {showOnlyPendingCheckout ? "Ver todas" : "Sem checkout"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAllBookings((prev) => !prev)}
+                      className="text-xs"
+                    >
+                      {showAllBookings ? "Ver apenas activas" : "Ver todas as reservas"}
+                    </Button>
+                  </div>
                 </div>
               )}
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-muted">
                     <tr>
-                      {["ID", "Cliente", "Apartamento", "Check-in", "Total", "Pago", "Restante", "Status", "Acções"].map((h) => (
+                      {["ID", "Cliente", "Apartamento", "Check-in", "Horários", "Total", "Pago", "Restante", "Status"].map((h) => (
                         <th key={h} className="text-left px-4 py-3 font-body text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filteredBookings.length > 0 ? filteredBookings.map((r) => {
+                    {finalFilteredBookings.length > 0 ? finalFilteredBookings.map((r) => {
                       const apt = apartments.find(a => a.id === r.apartment_id);
                       const checkoutDate = parseISO(r.checkout);
                       const isCheckoutToday = isSameDay(checkoutDate, new Date());
                       const isCheckoutOverdue = isAfter(new Date(), endOfDay(checkoutDate));
                       const hasOutstandingBalance = (r.restante_pagar ?? 0) > 0;
                       return (
-                        <tr key={r.id} className="hover:bg-muted/50 transition-colors">
+                        <tr 
+                          key={r.id} 
+                          className="hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => openBookingDetailPanel(r)}
+                        >
                           <td className="px-4 py-3 font-body text-sm text-primary font-medium">{r.id}</td>
                           <td className="px-4 py-3 font-body text-sm text-foreground">
                             <div className="flex flex-col">
@@ -695,6 +831,24 @@ const Admin = () => {
                           <td className="px-4 py-3 font-body text-sm text-muted-foreground">{apt?.nome || r.apartment_id}</td>
                           <td className="px-4 py-3 font-body text-sm text-muted-foreground">
                             {format(parseISO(r.checkin), "dd/MM/yyyy")}
+                          </td>
+                          <td className="px-4 py-3 font-body text-xs text-muted-foreground">
+                            <div className="flex flex-col gap-1">
+                              {r.checkin_real ? (
+                                <span className="text-blue-400">
+                                  ✅ {format(parseISO(r.checkin_real), "HH:mm")}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">- Entrada</span>
+                              )}
+                              {r.checkout_real ? (
+                                <span className="text-amber-400">
+                                  ✅ {format(parseISO(r.checkout_real), "HH:mm")}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">- Saída</span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 font-body text-sm text-foreground">
                             {formatCurrency(r.total_estadia)}
@@ -729,85 +883,15 @@ const Admin = () => {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              {r.status === "CONFIRMADA" && can("MANAGE_GUEST_ARRIVAL") && !r.checkin_real && (
-                                <button
-                                  onClick={() => handleCheckin(r.id)}
-                                  className="p-1 hover:text-primary transition-colors"
-                                  title="Registar Check-in"
-                                >
-                                  <LogIn className="w-4 h-4" />
-                                </button>
-                              )}
-                              {r.restante_pagar > 0 && (r.status === "CONFIRMADA" || r.status === "CHECKIN_REALIZADO") && can("MANAGE_BOOKINGS") && (
-                                <button
-                                  onClick={() => handleRegisterPayment(r)}
-                                  className="p-1 hover:text-green-500 transition-colors"
-                                  title="Liquidar Saldo"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                </button>
-                              )}
-                              {(r.status === "CONFIRMADA" || r.status === "CHECKIN_REALIZADO") && can("MANAGE_EXTRAS") && (
-                                <button
-                                  onClick={() => {
-                                    setSelectedBookingForExtra(r.id);
-                                    setIsAddingExtra(true);
-                                  }}
-                                  className="p-1 hover:text-primary transition-colors"
-                                  title="Adicionar Extra"
-                                >
-                                  <Plus className="w-4 h-4" />
-                                </button>
-                              )}
-                              {(r.status === "CONFIRMADA" || r.status === "CHECKIN_REALIZADO" || r.status === "FINALIZADA") && can("PRINT_RECEIPTS") && (
-                                <button
-                                  onClick={() => setViewingReceipt(r)}
-                                  className="p-1 hover:text-primary transition-colors"
-                                  title="Imprimir Recibo"
-                                >
-                                  <ClipboardList className="w-4 h-4" />
-                                </button>
-                              )}
-                              {r.status === "PENDENTE_PAGAMENTO" && can("MANAGE_BOOKINGS") && (
-                                <button
-                                  onClick={() => handleStatusUpdate(r.id, "CONFIRMADA")}
-                                  className="p-1 hover:text-green-500 transition-colors"
-                                  title="Confirmar Pagamento"
-                                >
-                                  <Check className="w-4 h-4" />
-                                </button>
-                              )}
-                              {(r.status === "PENDENTE_PAGAMENTO" || r.status === "CONFIRMADA") && (
-                                ((r.status === "CONFIRMADA") ? can("APPROVE_CANCEL") : can("MANAGE_BOOKINGS")) && (
-                                  <button
-                                    onClick={() => handleStatusUpdate(r.id, "CANCELADA")}
-                                    className="p-1 hover:text-destructive transition-colors"
-                                    title="Cancelar Reserva"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                )
-                              )}
-                              {r.status === "CANCELADA" && can("APPROVE_CANCEL") && (
-                                <button
-                                  onClick={() => handleStatusUpdate(r.id, "PENDENTE_PAGAMENTO")}
-                                  className="p-1 hover:text-primary transition-colors"
-                                  title="Reativar Reserva"
-                                >
-                                  <RefreshCcw className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
                         </tr>
                       );
                     }) : (
                       <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center font-body text-sm text-muted-foreground italic">
+                        <td colSpan={9} className="px-4 py-8 text-center font-body text-sm text-muted-foreground italic">
                           {normalizedSearch
                             ? "Nenhuma reserva encontrada para esta pesquisa."
+                            : showOnlyPendingCheckout
+                            ? "Nenhuma reserva pendente de checkout encontrada."
                             : (showAllBookings ? "Nenhuma reserva encontrada." : "Nenhuma reserva activa encontrada.")}
                         </td>
                       </tr>
@@ -1203,6 +1287,43 @@ const Admin = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Permissões Personalizadas</Label>
+                      <span className="text-xs text-muted-foreground">(Opcional)</span>
+                    </div>
+                    <div className="bg-muted/30 border border-border rounded p-3 space-y-2 max-h-48 overflow-y-auto">
+                      {Object.entries(ROLE_PERMISSIONS).flatMap(([_, perms]) => [...new Set(perms)]).map((permission) => (
+                        <div key={permission} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`perm-${permission}`}
+                            checked={userForm.customPermissions.includes(permission)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setUserForm({
+                                  ...userForm,
+                                  customPermissions: [...userForm.customPermissions, permission]
+                                });
+                              } else {
+                                setUserForm({
+                                  ...userForm,
+                                  customPermissions: userForm.customPermissions.filter(p => p !== permission)
+                                });
+                              }
+                            }}
+                            className="rounded cursor-pointer"
+                          />
+                          <label htmlFor={`perm-${permission}`} className="text-xs cursor-pointer text-muted-foreground hover:text-foreground">
+                            {permission.replace(/_/g, ' ')}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      Se deixar em branco, as permissões do perfil serão usadas
+                    </p>
+                  </div>
                   <Button type="submit" className="w-full bg-gradient-gold text-primary-foreground font-body">
                     <Plus className="w-4 h-4 mr-2" /> Criar Utilizador
                   </Button>
@@ -1227,7 +1348,7 @@ const Admin = () => {
                   <table className="w-full">
                     <thead className="bg-muted">
                       <tr>
-                        {['Nome', 'E-mail', 'Perfil', 'Acoes'].map((h) => (
+                        {['Nome', 'E-mail', 'Perfil', 'Permissões', 'Acoes'].map((h) => (
                           <th key={h} className="text-left px-4 py-3 font-body text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                         ))}
                       </tr>
@@ -1248,6 +1369,18 @@ const Admin = () => {
                             <span className={`font-body text-[10px] font-semibold uppercase px-2 py-0.5 rounded-sm border ${getRoleBadgeColor(u.role)}`}>
                               {u.role}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            {u.customPermissions && u.customPermissions.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                  Customizadas
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">({u.customPermissions.length})</span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">Padrão do perfil</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex gap-2">
@@ -1423,6 +1556,7 @@ const Admin = () => {
         </div>
       )}
 
+
       {/* Payment Method Dialog */}
       <Dialog open={showPaymentMethodDialog} onOpenChange={setShowPaymentMethodDialog}>
         <DialogContent className="bg-card border-border">
@@ -1480,7 +1614,244 @@ const Admin = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Booking Detail Panel */}
+      <Drawer open={showBookingDetailPanel} onOpenChange={setShowBookingDetailPanel}>
+        <DrawerContent className="bg-card border-border">
+          <DrawerHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <DrawerTitle className="font-display text-2xl text-foreground">
+                  {selectedBookingDetail?.cliente_nome}
+                </DrawerTitle>
+                <DrawerDescription className="text-muted-foreground mt-2">
+                  Reserva: <strong className="text-primary">{selectedBookingDetail?.id}</strong>
+                </DrawerDescription>
+              </div>
+              <DrawerClose />
+            </div>
+          </DrawerHeader>
+
+          {selectedBookingDetail && (
+            <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+              {/* Detalhes Principais */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-muted/30 rounded p-3 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">Apartamento</p>
+                  <p className="text-sm text-foreground font-medium">
+                    {apartmentsList.find(a => a.id === selectedBookingDetail.apartment_id)?.nome}
+                  </p>
+                </div>
+                <div className="bg-muted/30 rounded p-3 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">Status</p>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded ${statusColors[selectedBookingDetail.status]}`}>
+                    {selectedBookingDetail.status}
+                  </span>
+                </div>
+                <div className="bg-muted/30 rounded p-3 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">Check-in</p>
+                  <p className="text-sm text-foreground">{format(parseISO(selectedBookingDetail.checkin), "dd/MM/yyyy")}</p>
+                  {selectedBookingDetail.checkin_real && (
+                    <p className="text-xs text-blue-400 mt-1">✅ {format(parseISO(selectedBookingDetail.checkin_real), "HH:mm")}</p>
+                  )}
+                </div>
+                <div className="bg-muted/30 rounded p-3 border border-border">
+                  <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">Check-out</p>
+                  <p className="text-sm text-foreground">{format(parseISO(selectedBookingDetail.checkout), "dd/MM/yyyy")}</p>
+                  {selectedBookingDetail.checkout_real && (
+                    <p className="text-xs text-amber-400 mt-1">✅ {format(parseISO(selectedBookingDetail.checkout_real), "HH:mm")}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Contacto */}
+              <div className="bg-muted/30 rounded p-4 border border-border space-y-2">
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Contacto</p>
+                <div className="space-y-2 text-sm">
+                  <p><span className="text-muted-foreground">Email:</span> {selectedBookingDetail.email}</p>
+                  <p><span className="text-muted-foreground">Telefone:</span> {selectedBookingDetail.telefone}</p>
+                  <p><span className="text-muted-foreground">Pessoas:</span> {selectedBookingDetail.pessoas}</p>
+                </div>
+              </div>
+
+              {/* Financeiro */}
+              <div className="bg-muted/30 rounded p-4 border border-border space-y-3">
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Detalhes Financeiros</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total da Estadia:</span>
+                    <span className="text-foreground font-medium">{formatCurrency(selectedBookingDetail.total_estadia)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Sinal Pago:</span>
+                    <span className="text-green-500 font-medium">{formatCurrency(selectedBookingDetail.valor_sinal)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-border">
+                    <span className="text-muted-foreground">Restante:</span>
+                    <span className={`font-medium ${selectedBookingDetail.restante_pagar > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                      {formatCurrency(selectedBookingDetail.restante_pagar)}
+                    </span>
+                  </div>
+                  {selectedBookingDetail.metodo_pagamento && (
+                    <div className="pt-2 border-t border-border">
+                      <p className="text-xs text-muted-foreground mb-1">Forma de Pagamento:</p>
+                      <p className="text-sm text-foreground">{selectedBookingDetail.metodo_pagamento}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Extras */}
+              <div className="bg-muted/30 rounded p-4 border border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground uppercase font-semibold">Serviços Adicionais</p>
+                  {(selectedBookingDetail.status === "CONFIRMADA" || selectedBookingDetail.status === "CHECKIN_REALIZADO") && can("MANAGE_EXTRAS") && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsAddingExtraDetail(!isAddingExtraDetail)}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Adicionar
+                    </Button>
+                  )}
+                </div>
+
+                {isAddingExtraDetail && (
+                  <div className="space-y-3 p-3 bg-muted/50 rounded border border-border">
+                    <div>
+                      <Label htmlFor="extraItem" className="text-xs">Serviço</Label>
+                      <Input
+                        id="extraItem"
+                        value={extraDetailForm.item}
+                        onChange={(e) => setExtraDetailForm({ ...extraDetailForm, item: e.target.value })}
+                        placeholder="Ex: Pequeno Almoço"
+                        className="bg-muted border-border mt-1"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label htmlFor="extraQty" className="text-xs">Quantidade</Label>
+                        <Input
+                          id="extraQty"
+                          type="number"
+                          min="1"
+                          value={extraDetailForm.quantidade}
+                          onChange={(e) => setExtraDetailForm({ ...extraDetailForm, quantidade: parseInt(e.target.value) || 1 })}
+                          className="bg-muted border-border mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="extraPrice" className="text-xs">Preço</Label>
+                        <Input
+                          id="extraPrice"
+                          type="number"
+                          min="0"
+                          value={extraDetailForm.preco_unitario}
+                          onChange={(e) => setExtraDetailForm({ ...extraDetailForm, preco_unitario: parseFloat(e.target.value) || 0 })}
+                          className="bg-muted border-border mt-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={addExtraToBookingDetail}
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                      >
+                        Adicionar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsAddingExtraDetail(false)}
+                        className="flex-1"
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedBookingDetail.extras && selectedBookingDetail.extras.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedBookingDetail.extras.map((extra) => (
+                      <div key={extra.id} className="flex justify-between text-sm p-2 bg-muted/50 rounded border border-border">
+                        <div>
+                          <p className="text-foreground font-medium">{extra.item}</p>
+                          <p className="text-xs text-muted-foreground">{extra.quantidade}x {formatCurrency(extra.preco_unitario)}</p>
+                        </div>
+                        <p className="text-foreground font-medium">{formatCurrency(extra.preco_unitario * extra.quantidade)}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Nenhum serviço adicional</p>
+                )}
+              </div>
+
+              {/* Ações */}
+              <div className="space-y-2 pt-4 border-t border-border">
+                {selectedBookingDetail.status === "CONFIRMADA" && can("MANAGE_GUEST_ARRIVAL") && !selectedBookingDetail.checkin_real && (
+                  <Button
+                    onClick={() => {
+                      setShowBookingDetailPanel(false);
+                      openBookingDetailPanel(selectedBookingDetail);
+                      handleCheckin(selectedBookingDetail.id);
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    <LogIn className="w-4 h-4 mr-2" /> Registar Check-in
+                  </Button>
+                )}
+
+                {selectedBookingDetail.restante_pagar > 0 && selectedBookingDetail.status === "CONFIRMADA" && can("MANAGE_BOOKINGS") && (
+                  <Button
+                    onClick={() => {
+                      setShowBookingDetailPanel(false);
+                      handleRegisterPayment(selectedBookingDetail);
+                    }}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" /> Liquidar Saldo: {formatCurrency(selectedBookingDetail.restante_pagar)}
+                  </Button>
+                )}
+
+                {selectedBookingDetail.status === "CHECKIN_REALIZADO" && can("MANAGE_BOOKINGS") && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      💡 Conta aberta durante a estadia. Finalize no checkout para liquidar.
+                    </p>
+                  </div>
+                )}
+
+                {selectedBookingDetail.restante_pagar > 0 && selectedBookingDetail.status === "FINALIZADA" && can("MANAGE_BOOKINGS") && (
+                  <Button
+                    onClick={() => {
+                      setShowBookingDetailPanel(false);
+                      handleRegisterPayment(selectedBookingDetail);
+                    }}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" /> Liquidar Saldo Final: {formatCurrency(selectedBookingDetail.restante_pagar)}
+                  </Button>
+                )}
+
+                {(selectedBookingDetail.status === "CHECKIN_REALIZADO" || selectedBookingDetail.status === "FINALIZADA") && can("MANAGE_GUEST_ARRIVAL") && selectedBookingDetail.checkin_real && !selectedBookingDetail.checkout_real && (
+                  <Button
+                    onClick={() => {
+                      setShowBookingDetailPanel(false);
+                      handleCheckout(selectedBookingDetail.id);
+                    }}
+                    className="w-full bg-amber-600 hover:bg-amber-700"
+                  >
+                    <LogIn className="w-4 h-4 mr-2 rotate-180" /> Registar Check-out
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DrawerContent>
+      </Drawer>    </div>
   );
 };
 

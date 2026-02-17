@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MapPin } from "lucide-react";
 import heroImage from "@/assets/hero-room.jpg";
+import { HOTEL_INFO } from "@/data/apartments";
 
 const Hero = () => {
   return (
@@ -24,9 +25,15 @@ const Hero = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
         >
-          <p className="font-body text-xs sm:text-sm font-semibold tracking-[0.4em] uppercase text-primary mb-6">
-            Patriota, Luanda — Angola
-          </p>
+          <a 
+            href={HOTEL_INFO.googlemaps_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-body text-xs sm:text-sm font-semibold tracking-[0.4em] uppercase text-primary mb-6 hover:text-primary/80 transition-colors inline-flex items-center justify-center gap-2"
+          >
+            <MapPin className="w-4 h-4" />
+            {HOTEL_INFO.endereco}
+          </a>
         </motion.div>
 
         <motion.h1

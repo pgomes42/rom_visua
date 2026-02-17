@@ -154,6 +154,18 @@ export const apartments: Apartment[] = [
 
 export const BOOKING_DEPOSIT = 25000;
 
+// Informações do Roomview Boutique
+export const HOTEL_INFO = {
+  nome: "Room View Boutique",
+  endereco: "Rua Patriota, Luanda, Angola",
+  coordenadas: {
+    latitude: -8.9452583,
+    longitude: 13.1983771,
+  },
+  googlemaps_url: "https://maps.app.goo.gl/BpnFJg6sJr3ynGqW8",
+  descricao: "Hotel boutique de luxo no coração de Luanda, oferecendo acomodações sofisticadas e serviços personalizados.",
+};
+
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-AO", {
     style: "decimal",

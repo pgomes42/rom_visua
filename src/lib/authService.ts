@@ -6,6 +6,7 @@ export interface User {
     email: string;
     role: UserRole;
     password?: string; // Simulado
+    customPermissions?: Permission[]; // Permissões personalizadas opcionais
 }
 
 export type Permission =
@@ -112,7 +113,8 @@ export const authService = {
         const newUser: User = {
             id: `u${Date.now()}`,
             ...user,
-            password: user.password ?? "123456"
+            password: user.password ?? "123456",
+            customPermissions: user.customPermissions || undefined
         };
 
         const nextUsers = [...users, newUser];
@@ -131,6 +133,11 @@ export const authService = {
     },
 
     hasPermission(user: User, permission: Permission): boolean {
+        // Se tem permissões personalizadas, usa elas
+        if (user.customPermissions) {
+            return user.customPermissions.includes(permission);
+        }
+        // Caso contrário, usa as permissões do role
         return ROLE_PERMISSIONS[user.role].includes(permission);
     },
 

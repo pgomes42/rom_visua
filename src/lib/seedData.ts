@@ -20,6 +20,10 @@ const PAYMENT_METHODS: Array<'EXPRESS' | 'REFERENCIA' | 'TRANSFERENCIA' | 'PRESE
     'EXPRESS', 'REFERENCIA', 'TRANSFERENCIA', 'PRESENCIAL'
 ];
 
+const REMAINING_PAYMENT_METHODS: Array<'TRANSFERENCIA' | 'DINHEIRO' | 'TPA'> = [
+    'TRANSFERENCIA', 'DINHEIRO', 'TPA'
+];
+
 const EXTRAS_POOL = [
     { item: 'Água Mineral 500ml', preco: 500 },
     { item: 'Água Mineral 1.5L', preco: 800 },
@@ -119,9 +123,38 @@ export const seedBookings = (count: number = 50) => {
                 bookingToUpdate.metodo_pagamento = metodoPagamento;
                 bookingToUpdate.created_at = createdAt.toISOString();
                 
-                // Para reservas finalizadas e confirmadas, liquidar o saldo
+                // Registar horários de check-in e check-out
+                if (status === 'CHECKIN_REALIZADO' || status === 'FINALIZADA') {
+                    // Check-in entre 13:00 e 18:00
+                    const checkinHour = getRandomInt(13, 18);
+                    const checkinMinute = getRandomInt(0, 59);
+                    const checkinTime = new Date(checkInDate);
+                    checkinTime.setHours(checkinHour, checkinMinute, 0, 0);
+                    bookingToUpdate.checkin_real = checkinTime.toISOString();
+                }
+                
+                // Para reservas finalizadas, também registar check-out
                 if (status === 'FINALIZADA') {
-                    bookingToUpdate.restante_pagar = 0;
+                    // Check-out entre 09:00 e 12:00
+                    const checkoutHour = getRandomInt(9, 12);
+                    const checkoutMinute = getRandomInt(0, 59);
+                    const checkoutTime = new Date(checkOutDate);
+                    checkoutTime.setHours(checkoutHour, checkoutMinute, 0, 0);
+                    bookingToUpdate.checkout_real = checkoutTime.toISOString();
+                }
+                
+                // Para reservas finalizadas e confirmadas, simular pagamento completo
+                if (status === 'FINALIZADA' || status === 'CONFIRMADA') {
+                    // 70% de chance de pagar tudo, 30% de pagar parcial
+                    if (Math.random() < 0.7) {
+                        // Pagamento completo
+                        bookingToUpdate.restante_pagar = 0;
+                    } else {
+                        // Pagamento parcial - adicionar método de pagamento para saldo
+                        const restante = totalEstadia - valorSinal; // Falta pagar o resto
+                        bookingToUpdate.restante_pagar = restante;
+                        bookingToUpdate.metodo_pagamento_saldo = getRandomElement(REMAINING_PAYMENT_METHODS);
+                    }
                 }
             }
             bookingService.saveBookings(bookings);

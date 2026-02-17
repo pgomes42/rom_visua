@@ -11,7 +11,22 @@ export const apartmentService = {
             this.saveApartments(initialApartments);
             return initialApartments;
         }
-        return JSON.parse(data);
+        const stored = JSON.parse(data) as Apartment[];
+        const initialMap = new Map(initialApartments.map((apt) => [apt.id, apt]));
+
+        const normalized = stored.map((apt) => {
+            const initial = initialMap.get(apt.id);
+            if (!initial) return apt;
+
+            const shouldRefreshFotos = !apt.fotos || apt.fotos.length === 0;
+            return {
+                ...apt,
+                fotos: shouldRefreshFotos ? initial.fotos : initial.fotos,
+            };
+        });
+
+        this.saveApartments(normalized);
+        return normalized;
     },
 
     // Save apartments
