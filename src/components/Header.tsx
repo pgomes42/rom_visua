@@ -2,14 +2,14 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Phone } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import logo from "@/assets/logo.svg";
+
+const logoSrc = `${import.meta.env.BASE_URL}tranferencia/Logo-page.png`;
 
 const navItems = [
   { label: "Início", path: "/" },
   { label: "Apartamentos", path: "/#apartments" },
   { label: "Reservar", path: "/reservar" },
   { label: "Gerenciar", path: "/gerenciar-reserva" },
-  { label: "Contacto", path: "/#contact" },
 ];
 
 const Header = () => {
@@ -33,7 +33,7 @@ const Header = () => {
       <div className="container mx-auto px-4 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-20">
           <Link to="/" className="flex-shrink-0">
-            <img src={logo} alt="Roomview Boutique" className="h-10 lg:h-14" />
+            <img src={logoSrc} alt="Roomview Boutique" className="h-[3.4rem] lg:h-[4.7rem] rotate-0 object-contain" />
           </Link>
 
           {/* Desktop nav */}

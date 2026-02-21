@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { LayoutDashboard, CalendarDays, Building2, BarChart3, LogIn, LogOut, ClipboardList, Check, X, RefreshCcw, Plus, Edit2, Trash2, Save, X as CloseX, CheckCircle, Shield, DollarSign, Users, Percent, FileText } from "lucide-react";
-import { Apartment, BookingStatus, Booking, formatCurrency, RemainingPaymentMethod } from "@/data/apartments";
+import { Apartment, BookingStatus, Booking, formatCurrency, RemainingPaymentMethod, EXTRA_GUEST_FEE, MAX_EXTRA_GUESTS } from "@/data/apartments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,6 @@ import { authService, User, UserRole, Permission, ROLE_PERMISSIONS } from "@/lib
 import { format, parseISO, isSameDay, endOfDay, isAfter } from "date-fns";
 import { pt } from "date-fns/locale";
 import { toast } from "sonner";
-import logo from "@/assets/logo.svg";
 import { useSearchParams } from "react-router-dom";
 import PermissionsHelp from "@/components/PermissionsHelp";
 import ExtrasManager, { ExtraItem } from "@/components/ExtrasManager";
@@ -37,6 +36,8 @@ import {
   StatisticsFilters 
 } from "@/lib/statisticsService";
 import { seedBookings, clearAllBookings } from "@/lib/seedData";
+
+const logoSrc = `${import.meta.env.BASE_URL}tranferencia/Logo-page.png`;
 
 const statusColors: Record<string, string> = {
   PENDENTE_PAGAMENTO: "bg-yellow-500/10 text-yellow-500",
@@ -285,28 +286,57 @@ const Admin = () => {
   };
 
   const handleCheckin = (id: string) => {
-    const bookings = bookingService.getBookings();
-    const index = bookings.findIndex(b => b.id === id);
-    
-    if (index !== -1) {
-      // Registar com a hora atual
-      bookings[index].checkin_real = new Date().toISOString();
-      bookings[index].operador_checkin = currentUser?.email;
-      if (bookings[index].status === "CONFIRMADA") {
-        bookings[index].status = "CHECKIN_REALIZADO";
-      }
-      
-      bookingService.saveBookings(bookings);
-      setBookings(bookingService.getBookings());
-      // Atualizar painel se estiver aberto
-      if (selectedBookingDetail?.id === id) {
-        const updated = bookingService.getBookingById(id);
-        if (updated) {
-          setSelectedBookingDetail(updated);
-        }
-      }
-      toast.success("Check-in registado!");
+    const booking = bookingService.getBookingById(id);
+    if (!booking) {
+      toast.error("Reserva não encontrada.");
+      return;
     }
+
+    const apartment = apartments.find((a) => a.id === booking.apartment_id);
+    if (!apartment) {
+      toast.error("Apartamento associado não encontrado.");
+      return;
+    }
+
+    let extraGuests = 0;
+    if (apartment.capacidade > 4) {
+      const answer = window.prompt(
+        `Adicionar hóspedes no check-in? (0 a ${MAX_EXTRA_GUESTS})\nCusto: ${formatCurrency(EXTRA_GUEST_FEE)} por pessoa.`,
+        "0"
+      );
+
+      if (answer === null) {
+        return;
+      }
+
+      const parsed = Number(answer);
+      if (!Number.isInteger(parsed) || parsed < 0 || parsed > MAX_EXTRA_GUESTS) {
+        toast.error(`Informe um número inteiro entre 0 e ${MAX_EXTRA_GUESTS}.`);
+        return;
+      }
+      extraGuests = parsed;
+    }
+
+    const success = bookingService.registerCheckin(id, currentUser?.email, extraGuests);
+    if (!success) {
+      toast.error("Não foi possível registar check-in.");
+      return;
+    }
+
+    setBookings(bookingService.getBookings());
+    if (selectedBookingDetail?.id === id) {
+      const updated = bookingService.getBookingById(id);
+      if (updated) {
+        setSelectedBookingDetail(updated);
+      }
+    }
+
+    if (extraGuests > 0) {
+      toast.success(`Check-in registado com ${extraGuests} hóspede(s) adicional(is).`);
+      return;
+    }
+
+    toast.success("Check-in registado!");
   };
 
   const handleCheckout = (id: string) => {
@@ -494,7 +524,7 @@ const Admin = () => {
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src={logo} alt="Roomview Boutique" className="h-16 mx-auto mb-6" />
+            <img src={logoSrc} alt="Roomview Boutique" className="h-[5.4rem] mx-auto mb-6 rotate-0 object-contain" />
             {/*<h1 className="font-display text-4xl font-bold tracking-tighter text-foreground mb-2">Roomview <span className="text-gradient-gold">Boutique</span></h1>*/}
             <p className="font-body text-muted-foreground italic">Painel Administrativo v2.0</p>
           </div>
@@ -640,7 +670,7 @@ const Admin = () => {
       <aside className="fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border p-6 hidden lg:block">
         <div className="flex flex-col h-full">
           <div className="mb-10">
-            <img src={logo} alt="Roomview Boutique" className="h-10 mb-6" />
+            <img src={logoSrc} alt="Roomview Boutique" className="h-[3.4rem] mb-6 rotate-0 object-contain" />
             <div className="mt-4 p-3 bg-muted rounded-sm border border-border/50">
               <div className={`text-[10px] font-bold uppercase tracking-widest mb-1 px-2 py-1 rounded border inline-block ${getRoleBadgeColor(currentUser?.role || '')}`}>
                 {currentUser?.role}
@@ -1435,7 +1465,7 @@ const Admin = () => {
             <div id="receipt-content" className="space-y-6 font-mono text-sm uppercase tracking-tight p-4 border border-slate-200">
               <div className="text-center border-b border-dashed border-slate-300 pb-4 mb-4">
                 <div className="flex justify-center mb-4">
-                  <img src={logo} alt="Roomview" className="h-12 w-auto invert brightness-0" />
+                  <img src={logoSrc} alt="Roomview" className="h-[4rem] w-auto rotate-0 object-contain" />
                 </div>
                 <h2 className="text-xl font-bold">Roomview Boutique</h2>
                 <p>Luanda, Patriota, Via Principal</p>

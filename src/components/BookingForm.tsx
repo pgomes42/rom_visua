@@ -44,7 +44,21 @@ const BookingForm = () => {
     return 0;
   }, [checkin, checkout]);
 
+  const selectedGuests = Number(pessoas);
   const totalPrice = apartment ? nights * apartment.preco_noite : 0;
+
+  const isValidEmail = (value: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
+
+  const isValidPhone = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    return digits.length >= 9 && digits.length <= 15;
+  };
+
+  const phoneDigitsCount = telefone.replace(/\D/g, "").length;
+  const showPhoneError = telefone.trim().length > 0 && !isValidPhone(telefone);
+  const showEmailError = email.trim().length > 0 && !isValidEmail(email);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,13 +68,23 @@ const BookingForm = () => {
       return;
     }
 
-    if (Number(pessoas) > apartment.capacidade) {
+    if (selectedGuests > apartment.capacidade) {
       toast.error(`Este apartamento suporta no máximo ${apartment.capacidade} hóspedes.`);
       return;
     }
 
     if (!nome.trim() || !telefone.trim() || !email.trim()) {
       toast.error("Por favor preencha seus dados pessoais.");
+      return;
+    }
+
+    if (!isValidPhone(telefone)) {
+      toast.error("Número de telefone inválido. Informe pelo menos 9 dígitos.");
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      toast.error("E-mail inválido. Verifique o formato informado.");
       return;
     }
 
@@ -74,7 +98,7 @@ const BookingForm = () => {
       checkout: checkout.toISOString(),
       noites: nights,
       total_estadia: totalPrice,
-      pessoas: Number(pessoas),
+      pessoas: selectedGuests,
     });
 
     if (!result.success) {
@@ -272,6 +296,11 @@ const BookingForm = () => {
                 maxLength={20}
               />
             </div>
+            {showPhoneError && (
+              <p className="text-destructive text-xs font-body">
+                Telefone inválido: mínimo 9 dígitos (atual: {phoneDigitsCount}).
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -287,6 +316,11 @@ const BookingForm = () => {
                 maxLength={255}
               />
             </div>
+            {showEmailError && (
+              <p className="text-destructive text-xs font-body">
+                E-mail inválido. Exemplo: nome@dominio.com
+              </p>
+            )}
           </div>
         </div>
 
@@ -299,7 +333,7 @@ const BookingForm = () => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-card border-border">
-                {[1, 2, 3, 4, 5].map((n) => (
+                {Array.from({ length: Math.max(1, apartment?.capacidade ?? 1) }, (_, idx) => idx + 1).map((n) => (
                   <SelectItem key={n} value={String(n)} className="font-body">
                     {n} {n === 1 ? "pessoa" : "pessoas"}
                   </SelectItem>
@@ -307,7 +341,7 @@ const BookingForm = () => {
               </SelectContent>
             </Select>
           </div>
-          {apartment && Number(pessoas) > apartment.capacidade && (
+          {apartment && selectedGuests > apartment.capacidade && (
             <p className="text-destructive text-xs font-body">
               Capacidade máxima: {apartment.capacidade} hóspedes
             </p>

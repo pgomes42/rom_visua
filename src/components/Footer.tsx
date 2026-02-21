@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { MapPin, Phone, Mail } from "lucide-react";
-import logo from "@/assets/logo.svg";
 import { HOTEL_INFO } from "@/data/apartments";
+
+const logoSrc = `${import.meta.env.BASE_URL}tranferencia/Logo-page.png`;
 
 const Footer = () => {
   return (
@@ -10,7 +11,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           {/* Brand */}
           <div>
-            <img src={logo} alt="Roomview Boutique" className="h-12 mb-6" />
+            <img src={logoSrc} alt="Roomview Boutique" className="h-[4rem] mb-6 rotate-0 object-contain" />
             <p className="font-body text-sm text-muted-foreground leading-relaxed">
               Alojamento boutique premium no Patriota, Luanda. 
               Conforto, privacidade e segurança 24/7.

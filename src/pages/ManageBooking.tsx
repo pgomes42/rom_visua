@@ -16,7 +16,6 @@ import { useNavigate, Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import logo from "@/assets/logo.svg";
 
 const statusConfig = {
     PENDENTE_PAGAMENTO: { label: "Aguardando Pagamento", color: "bg-yellow-500/10 text-yellow-500", icon: Clock },
@@ -73,8 +72,29 @@ const ManageBooking = () => {
         return authService.hasPermission(currentUser, permission as any);
     };
 
+    const isValidEmail = (value: string) => {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    };
+
+    const isValidPhone = (value: string) => {
+        const digits = value.replace(/\D/g, "");
+        return digits.length >= 9 && digits.length <= 15;
+    };
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
+
+        const trimmedContact = contact.trim();
+        if (!trimmedContact) {
+            toast.error("Informe o telefone ou e-mail de contacto.");
+            return;
+        }
+
+        if (!isValidEmail(trimmedContact) && !isValidPhone(trimmedContact)) {
+            toast.error("Contacto inválido. Use um e-mail válido ou um número de telefone válido.");
+            return;
+        }
+
         setSearching(true);
         setBooking(null);
 
@@ -177,6 +197,7 @@ const ManageBooking = () => {
                                         value={contact}
                                         onChange={(e) => setContact(e.target.value)}
                                         className="bg-muted border-border h-12 text-base"
+                                        maxLength={255}
                                         required
                                     />
                                     <p className="text-xs text-muted-foreground">Para verificar a sua identidade</p>

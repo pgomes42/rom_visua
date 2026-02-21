@@ -1,8 +1,36 @@
-import roomStudio from "@/assets/room-studio.jpg";
-import roomT1 from "@/assets/room-t1.jpg";
-import roomExecutive from "@/assets/room-executive.jpg";
-import roomFamily from "@/assets/room-family.jpg";
-import roomPresidential from "@/assets/room-presidential.jpg";
+const publicBaseUrl = import.meta.env.BASE_URL;
+
+const roomPhoto = (fileName: string) => `${publicBaseUrl}tranferencia/${fileName}`;
+
+const realRoomPhotos = [
+  "PHOTO-2026-02-19-16-10-18.jpg",
+  "PHOTO-2026-02-19-16-10-20.jpg",
+  "PHOTO-2026-02-19-16-10-22.jpg",
+  "PHOTO-2026-02-19-16-10-23.jpg",
+  "PHOTO-2026-02-19-16-10-23_1.jpg",
+  "PHOTO-2026-02-19-16-10-24.jpg",
+  "PHOTO-2026-02-19-16-10-24_1.jpg",
+  "PHOTO-2026-02-19-16-10-24_2.jpg",
+  "PHOTO-2026-02-19-16-10-25.jpg",
+  "PHOTO-2026-02-19-16-10-25_1.jpg",
+  "PHOTO-2026-02-19-16-10-25_2.jpg",
+  "PHOTO-2026-02-19-16-10-26.jpg",
+  "PHOTO-2026-02-19-16-10-26_1.jpg",
+  "PHOTO-2026-02-19-16-10-26_2.jpg",
+  "PHOTO-2026-02-19-16-10-27.jpg",
+  "PHOTO-2026-02-19-16-10-27_1.jpg",
+  "PHOTO-2026-02-19-16-10-28.jpg",
+  "PHOTO-2026-02-19-16-10-28_1.jpg",
+  "PHOTO-2026-02-19-16-10-28_2.jpg",
+  "PHOTO-2026-02-19-16-10-28_3.jpg",
+  "PHOTO-2026-02-19-16-10-29.jpg",
+  "PHOTO-2026-02-19-16-10-29_1.jpg",
+  "PHOTO-2026-02-19-16-10-30.jpg",
+  "PHOTO-2026-02-19-16-10-30_1.jpg",
+  "PHOTO-2026-02-19-16-10-30_2.jpg",
+  "PHOTO-2026-02-19-16-10-30_3.jpg",
+  "PHOTO-2026-02-19-16-10-31.jpg",
+].map(roomPhoto);
 
 export interface Apartment {
   id: string;
@@ -77,7 +105,7 @@ export const apartments: Apartment[] = [
     banheiros: 1,
     dimensao: "40 m²",
     localizacao: "Patriota, Luanda",
-    fotos: [roomStudio],
+    fotos: realRoomPhotos.slice(0, 4),
     status: "ativo",
   },
   {
@@ -91,7 +119,7 @@ export const apartments: Apartment[] = [
     banheiros: 1,
     dimensao: "55 m²",
     localizacao: "Patriota, Luanda",
-    fotos: [roomT1],
+    fotos: realRoomPhotos.slice(4, 9),
     status: "ativo",
   },
   {
@@ -105,7 +133,7 @@ export const apartments: Apartment[] = [
     banheiros: 2,
     dimensao: "80 m²",
     localizacao: "Patriota, Luanda",
-    fotos: [roomExecutive],
+    fotos: realRoomPhotos.slice(9, 14),
     status: "ativo",
   },
   {
@@ -119,7 +147,7 @@ export const apartments: Apartment[] = [
     banheiros: 2,
     dimensao: "85 m²",
     localizacao: "Patriota, Luanda",
-    fotos: [roomExecutive],
+    fotos: realRoomPhotos.slice(14, 18),
     status: "ativo",
   },
   {
@@ -133,7 +161,7 @@ export const apartments: Apartment[] = [
     banheiros: 2,
     dimensao: "95 m²",
     localizacao: "Patriota, Luanda",
-    fotos: [roomFamily],
+    fotos: realRoomPhotos.slice(18, 23),
     status: "ativo",
   },
   {
@@ -147,12 +175,14 @@ export const apartments: Apartment[] = [
     banheiros: 2,
     dimensao: "110 m²",
     localizacao: "Patriota, Luanda",
-    fotos: [roomPresidential],
+    fotos: realRoomPhotos.slice(23, 27),
     status: "ativo",
   },
 ];
 
 export const BOOKING_DEPOSIT = 25000;
+export const EXTRA_GUEST_FEE = 25000;
+export const MAX_EXTRA_GUESTS = 2;
 
 // Informações do Roomview Boutique
 export const HOTEL_INFO = {

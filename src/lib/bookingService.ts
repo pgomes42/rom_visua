@@ -1,5 +1,6 @@
-import { Booking, BookingStatus, BOOKING_DEPOSIT, BookingExtra, PaymentMethod, RemainingPaymentMethod } from "@/data/apartments";
+import { Booking, BookingStatus, BOOKING_DEPOSIT, BookingExtra, PaymentMethod, RemainingPaymentMethod, EXTRA_GUEST_FEE, MAX_EXTRA_GUESTS } from "@/data/apartments";
 import { parseISO, areIntervalsOverlapping, addHours, isAfter, endOfDay, isSameDay } from "date-fns";
+import { apartmentService } from "@/lib/apartmentService";
 
 const STORAGE_KEY = "roomview_bookings";
 
@@ -60,6 +61,27 @@ export const bookingService = {
     // Create a new booking
     createBooking(bookingData: Omit<Booking, "id" | "created_at" | "status" | "referencia_pagamento" | "valor_sinal" | "expires_at" | "restante_pagar">): { success: boolean; booking?: Booking; error?: string } {
         const bookings = this.getBookings();
+        const apartment = apartmentService.getApartments().find(a => a.id === bookingData.apartment_id);
+        const phoneDigits = bookingData.telefone.replace(/\D/g, "");
+        const email = bookingData.email.trim();
+
+        if (phoneDigits.length < 9 || phoneDigits.length > 15) {
+            return { success: false, error: "Telefone inválido. Informe entre 9 e 15 dígitos." };
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return { success: false, error: "E-mail inválido." };
+        }
+
+        if (!apartment) {
+            return { success: false, error: "Apartamento não encontrado." };
+        }
+
+        if (bookingData.pessoas > apartment.capacidade) {
+            return { success: false, error: `Este apartamento suporta no máximo ${apartment.capacidade} hóspedes.` };
+        }
+
+        const recalculatedTotal = bookingData.noites * apartment.preco_noite;
 
         // 1. Validate capacity (already done in UI but good for safety)
 
@@ -86,11 +108,12 @@ export const bookingService = {
 
         const newBooking: Booking = {
             ...bookingData,
+            total_estadia: recalculatedTotal,
             id,
             status: "PENDENTE_PAGAMENTO",
             referencia_pagamento: referencia,
             valor_sinal: BOOKING_DEPOSIT,
-            restante_pagar: bookingData.total_estadia - BOOKING_DEPOSIT,
+            restante_pagar: recalculatedTotal - BOOKING_DEPOSIT,
             created_at: new Date().toISOString(),
             expires_at: addHours(new Date(), 2).toISOString(),
         };
@@ -135,18 +158,35 @@ export const bookingService = {
     },
 
     // Register guest arrival
-    registerCheckin(id: string, operadorEmail?: string): boolean {
+    registerCheckin(id: string, operadorEmail?: string, extraGuests: number = 0): boolean {
         const bookings = this.getBookings();
         const index = bookings.findIndex(b => b.id === id);
 
         if (index === -1) return false;
 
-        bookings[index].checkin_real = new Date().toISOString();
-        if (operadorEmail) {
-            bookings[index].operador_checkin = operadorEmail;
+        const booking = bookings[index];
+        if (booking.checkin_real) return false;
+
+        const apartment = apartmentService.getApartments().find(a => a.id === booking.apartment_id);
+        if (!apartment) return false;
+
+        const supportsExtraGuests = apartment.capacidade > 4;
+        if (!supportsExtraGuests && extraGuests > 0) return false;
+        if (!Number.isInteger(extraGuests) || extraGuests < 0 || extraGuests > MAX_EXTRA_GUESTS) return false;
+
+        const extraCharge = extraGuests * EXTRA_GUEST_FEE;
+        if (extraCharge > 0) {
+            booking.pessoas += extraGuests;
+            booking.total_estadia += extraCharge;
+            booking.restante_pagar += extraCharge;
         }
-        if (bookings[index].status === "CONFIRMADA") {
-            bookings[index].status = "CHECKIN_REALIZADO";
+
+        booking.checkin_real = new Date().toISOString();
+        if (operadorEmail) {
+            booking.operador_checkin = operadorEmail;
+        }
+        if (booking.status === "CONFIRMADA") {
+            booking.status = "CHECKIN_REALIZADO";
         }
 
         this.saveBookings(bookings);
